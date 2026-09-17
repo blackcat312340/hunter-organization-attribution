@@ -1,84 +1,132 @@
-schema_version: 1
+schema_version: 2
 rules:
   - rule_id: lens.category.education_research.asn_org
     target: organization_category
     field: asn_organization
     operator: regex
-    pattern: '(?:cernet|education\s+and\s+research|university|college|academy\s+of\s+sciences|cnic-cas|research\s+network|教育|大学|学院|科学院|中科院)'
+    pattern: 'cernet|education and research|\.edu\.|university|college|教育|大学|学院|academy of sciences|科学院|cnic-cas|中科院|research network'
     resolved_category: education_research
     source: LENS-20260602
-    notes: Migrated from EDU_RESEARCH_PAT; category-only and never creates an organization identity.
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: EDU_RESEARCH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local ASN-organization rule
+    notes: Exact source regex preserved; category-only and never creates organization identity.
   - rule_id: lens.category.education_research.domain
     target: organization_category
     field: domain
     operator: regex
-    pattern: '(?:\.edu(?:\.|$)|\.ac\.[a-z]{2}$)'
+    pattern: 'cernet|education and research|\.edu\.|university|college|教育|大学|学院|academy of sciences|科学院|cnic-cas|中科院|research network'
     resolved_category: education_research
     source: LENS-20260602
-    notes: Field-separated Hunter translation of the LENS combined-text rule.
-  - rule_id: lens.category.education_research.host
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: EDU_RESEARCH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local domain rule
+    notes: Exact source regex preserved; category-only and never creates organization identity.
+  - rule_id: lens.category.government.asn_org
     target: organization_category
-    field: host
+    field: asn_organization
     operator: regex
-    pattern: '(?://[^/]*\.edu(?:[./:]|$)|cernet|cnic-cas)'
-    resolved_category: education_research
+    pattern: 'gov\.|government|人民政府|ministry|国务院|公安|police'
+    resolved_category: government
     source: LENS-20260602
-    notes: Executable only against the reviewed Hunter host field.
-  - rule_id: lens.category.education_research.title
-    target: organization_category
-    field: web_title
-    operator: regex
-    pattern: '(?:university|college|academy\s+of\s+sciences|national\s+laboratory|教育|大学|学院|科学院|中科院)'
-    resolved_category: education_research
-    source: LENS-20260602
-    notes: Migrated title-compatible education and research terms.
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: GOV_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local ASN-organization rule
+    notes: Exact source regex preserved; category evidence only.
   - rule_id: lens.category.government.domain
     target: organization_category
     field: domain
     operator: regex
-    pattern: '(?:\.gov(?:\.|$)|\.mil(?:\.|$)|europa\.eu$)'
+    pattern: 'gov\.|government|人民政府|ministry|国务院|公安|police'
     resolved_category: government
     source: LENS-20260602
-    notes: Migrated from GOV_PAT and sensitive rules without resolving an agency name.
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: GOV_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local domain rule
+    notes: Exact source regex preserved; category evidence only.
   - rule_id: lens.category.finance.asn_org
     target: organization_category
     field: asn_organization
     operator: regex
-    pattern: '(?:bank|finance|securities|insurance|银行|证券|保险)'
+    pattern: 'bank|银行|证券|保险|finance|trust co'
     resolved_category: finance
     source: LENS-20260602
-    notes: Migrated from FINANCE_PAT; classification only.
-  - rule_id: lens.category.healthcare.title
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: FINANCE_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local ASN-organization rule
+    notes: Exact source regex preserved; category evidence only.
+  - rule_id: lens.category.finance.domain
     target: organization_category
-    field: web_title
+    field: domain
     operator: regex
-    pattern: '(?:hospital|health|医院)'
+    pattern: 'bank|银行|证券|保险|finance|trust co'
+    resolved_category: finance
+    source: LENS-20260602
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: FINANCE_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local domain rule
+    notes: Exact source regex preserved; category evidence only.
+  - rule_id: lens.category.healthcare.asn_org
+    target: organization_category
+    field: asn_organization
+    operator: regex
+    pattern: 'hospital|医院|health'
     resolved_category: healthcare
     source: LENS-20260602
-    notes: Migrated from HEALTH_PAT; title evidence is category-only.
-  - rule_id: lens.unsupported.fofa.body.education
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: HEALTH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local ASN-organization rule
+    notes: Exact source regex preserved; category evidence only.
+  - rule_id: lens.category.healthcare.domain
     target: organization_category
-    field: fofa_body
+    field: domain
     operator: regex
-    pattern: '(?:university|education|research)'
-    resolved_category: education_research
+    pattern: 'hospital|医院|health'
+    resolved_category: healthcare
     source: LENS-20260602
-    notes: Unsupported reference; FOFA body has no approved Hunter-equivalent field.
-    executable: false
-  - rule_id: lens.unsupported.fofa.server
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: HEALTH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local domain rule
+    notes: Exact source regex preserved; category evidence only.
+  - rule_id: lens.category.state_owned_enterprise.asn_org
     target: organization_category
-    field: fofa_server
+    field: asn_organization
     operator: regex
-    pattern: '.+'
+    pattern: 'state grid|国家电网|petrochina|中石油|sinopec|中石化'
+    resolved_category: state_owned_enterprise
     source: LENS-20260602
-    notes: Unsupported reference; FOFA server is not in NormalizedHunterRecord.
-    executable: false
-  - rule_id: lens.unsupported.fofa.app
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: SOE_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local ASN-organization rule
+    notes: Source-verified SOE classifier; category evidence only.
+  - rule_id: lens.category.state_owned_enterprise.domain
     target: organization_category
-    field: fofa_app
+    field: domain
     operator: regex
-    pattern: '.+'
+    pattern: 'state grid|国家电网|petrochina|中石油|sinopec|中石化'
+    resolved_category: state_owned_enterprise
     source: LENS-20260602
-    notes: Unsupported reference; FOFA app is not in NormalizedHunterRecord.
-    executable: false
-
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: SOE_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local domain rule
+    notes: Source-verified SOE classifier; category evidence only.
