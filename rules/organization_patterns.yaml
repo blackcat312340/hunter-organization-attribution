@@ -1,39 +1,71 @@
-schema_version: 1
+schema_version: 2
 rules:
-  - rule_id: lens.infrastructure.aws.asn_org
+  - rule_id: lens.infrastructure.cloud.asn_org
+    target: infrastructure
+    field: asn_organization
+    operator: regex
+    pattern: 'alibaba|aliyun|tencent|huawei cloud|baidu|volcano engine|bytedance|ucloud|qingcloud|jd cloud|kingsoft|amazon\.com|google llc|microsoft|digitalocean|ovh|hetzner|cloudflare|linode|vultr'
+    resolved_category: cloud_vendor
+    source: LENS-20260602
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: CLOUD_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local infrastructure rule
+    notes: Exact source regex preserved; identifies cloud infrastructure category, not hosted organization identity.
+  - rule_id: lens.infrastructure.cloud.domain
+    target: infrastructure
+    field: domain
+    operator: regex
+    pattern: 'alibaba|aliyun|tencent|huawei cloud|baidu|volcano engine|bytedance|ucloud|qingcloud|jd cloud|kingsoft|amazon\.com|google llc|microsoft|digitalocean|ovh|hetzner|cloudflare|linode|vultr'
+    resolved_category: cloud_vendor
+    source: LENS-20260602
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: CLOUD_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: split LENS org+domain combined text into a field-local infrastructure rule
+    notes: Exact source regex preserved; identifies cloud infrastructure category, not hosted organization identity.
+  - rule_id: lens.infrastructure.isp.asn_org
+    target: infrastructure
+    field: asn_organization
+    operator: regex
+    pattern: '^chinanet$|^china telecom|^china unicom|^china mobile|^chinanet |chinatelecom|chinamobile|china169|unicom|telecom group|communications group|idc network|province.*network|backbone|comcast|charter|verizon|att |at&t|ntt |kddi|sk broadband|deutsche telekom'
+    resolved_category: isp_carrier
+    source: LENS-20260602
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: ISP_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: LENS ISP_PAT already applies only to org; mapped to Hunter ASN organization context
+    notes: Exact source regex preserved; infrastructure category only.
+  - rule_id: adaptation.infrastructure.aws.asn_org
     target: infrastructure
     field: asn_organization
     operator: regex
     pattern: '(?:amazon\.com|amazon data services|amazon technologies|\baws\b)'
     resolved_category: cloud_vendor
     organization: Amazon Web Services
-    source: LENS-20260602
-    notes: CLOUD_PAT/CLOUD_ISP_SKIP migration; infrastructure context, never hosted organization identity.
-  - rule_id: lens.infrastructure.cernet.asn_org
+    source: method-adaptation
+    source_reference: LENS-20260602:CLOUD_PAT
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: CLOUD_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: named-provider refinement for common Hunter ASN-organization labels
+    notes: Adds a named AWS infrastructure context while the source CLOUD_PAT remains separately preserved.
+  - rule_id: adaptation.infrastructure.cernet.asn_org
     target: infrastructure
     field: asn_organization
     operator: regex
     pattern: '(?:cernet|china education and research network)'
-    resolved_category: education_research
+    resolved_category: education_research_network
     organization: CERNET
-    source: LENS-20260602
-    notes: Network context only unless a separate authority explicitly identifies an institution.
-  - rule_id: lens.infrastructure.cloud.asn_org
-    target: infrastructure
-    field: asn_organization
-    operator: regex
-    pattern: '(?:alibaba|aliyun|tencent|huawei cloud|google llc|microsoft|cloudflare|hetzner|digitalocean|ovh|oracle corporation|linode|vultr)'
-    resolved_category: cloud_vendor
-    organization: Generic cloud/CDN provider
-    source: LENS-20260602
-    notes: Broad LENS cloud pattern retained as infrastructure classification, not identity attribution.
-  - rule_id: lens.infrastructure.isp.asn_org
-    target: infrastructure
-    field: asn_organization
-    operator: regex
-    pattern: '(?:chinanet|china telecom|china unicom|china mobile|comcast|verizon|deutsche telekom|\bntt\b|\bkddi\b)'
-    resolved_category: isp_carrier
-    organization: Generic ISP/carrier
-    source: LENS-20260602
-    notes: Broad LENS ISP pattern retained as network context, not hosted organization identity.
-
+    source: method-adaptation
+    source_reference: LENS-20260602:EDU_RESEARCH_PAT
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: EDU_RESEARCH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: typed network-context refinement required by organization/infrastructure orthogonality
+    notes: CERNET remains infrastructure/network context and never becomes the hosted organization identity.
