@@ -20,7 +20,7 @@ Loaders verify:
 - required fields;
 - optional expected row count;
 - IPv4/range validity;
-- ASN syntax and role semantics;
+- ASN syntax/range and role semantics;
 - basic domain syntax;
 - provenance/audit metadata.
 
@@ -47,13 +47,15 @@ Only this metadata belongs in Git. The actual CSV must remain external.
 - filename: `LENS-20260602.zip`
 - recorded SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
 - use: methodology/rule migration reference only
+- migration review date: `2026-09-17`
 - runtime role: none
 - repository status: excluded by `*.zip`
 - migrated runtime fields: `org -> asn_organization` (semantic narrowing), `domain -> domain/root_domain`, `hosts -> host`, `titles -> web_title`
 - unsupported runtime fields: `body`, `server`, `app`
 - migration inventory: `docs/LENS_RULE_MIGRATION.md`
+- known source-verification gap: preserved task notes identify an `SOE` category family whose exact source rule is not available in the current review environment
 
-The archive bytes were not available in this review environment for an independent re-hash. If the archive is reintroduced, the recorded digest must be verified before migration changes are accepted.
+The archive bytes were not available in this review environment for an independent re-hash. The recorded digest therefore remains inherited provenance rather than a newly verified digest. If the archive is reintroduced, its digest must be verified before source-complete migration is claimed, and the original classifier must be compared rule by rule with the repository inventory. No missing executable rule should be reconstructed from a category name or summary alone.
 
 ## Exact-IP/domain association authorities
 
