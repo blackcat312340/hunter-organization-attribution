@@ -1,0 +1,59 @@
+[
+  {
+    "id": "0example01",
+    "status": "active",
+    "names": [
+      {"value": "Example Research University", "types": ["ror_display", "label"]},
+      {"value": "Example RU", "types": ["acronym"]}
+    ],
+    "domains": ["example.edu", "example.ac.uk"]
+  },
+  {
+    "id": "0example02",
+    "status": "active",
+    "names": [
+      {"value": "Example Institute of Technology", "types": ["ror_display", "label"]}
+    ],
+    "domains": ["example-institute.edu"]
+  },
+  {
+    "id": "0example03",
+    "status": "active",
+    "names": [
+      {"value": "Example Domainless Academy", "types": ["ror_display", "label"]}
+    ],
+    "domains": []
+  },
+  {
+    "id": "0example04",
+    "status": "inactive",
+    "names": [
+      {"value": "Example Retired College", "types": ["ror_display", "label"]}
+    ],
+    "domains": ["retired.example.org"]
+  },
+  {
+    "id": "0shared001",
+    "status": "active",
+    "names": [
+      {"value": "Shared Domain Organization A", "types": ["ror_display", "label"]}
+    ],
+    "domains": ["shared.example.net"]
+  },
+  {
+    "id": "0shared002",
+    "status": "active",
+    "names": [
+      {"value": "Shared Domain Organization B", "types": ["ror_display", "label"]}
+    ],
+    "domains": ["shared.example.net", "unique-b.example.net"]
+  },
+  {
+    "id": "0example05",
+    "status": "active",
+    "names": [
+      {"value": "Duplicate Domain Institute", "types": ["ror_display", "label"]}
+    ],
+    "domains": ["dup.example.edu", "dup.example.edu"]
+  }
+]

@@ -4,12 +4,18 @@ from bisect import bisect_right
 import ipaddress
 import re
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
+from .asn_organization import (
+    AsnOrganizationAuthority,
+    AsnOrganizationEnrichmentConflict,
+    agreement_ok,
+)
 from .models import AttributionResult, Evidence, NormalizedHunterRecord
 from .provenance import LoadedAuthority
-from .resolution import resolve
+from .resolution import canonical_organization_name, resolve
 from .rules.loader import load_rules
 
 
@@ -23,9 +29,20 @@ RULE_FAMILY_BY_FIELD = {
 
 
 class AttributionEngine:
-    def __init__(self, rules: Iterable[dict[str, Any]] = (), authorities: Iterable[LoadedAuthority] = ()):
+    def __init__(
+        self,
+        rules: Iterable[dict[str, Any]] = (),
+        authorities: Iterable[LoadedAuthority] = (),
+        asn_organization_authorities: Iterable[AsnOrganizationAuthority] = (),
+    ):
         self.rules = tuple(sorted((r for r in rules if r.get("executable", True)), key=lambda r: r["rule_id"]))
         self.authorities = tuple(sorted(authorities, key=lambda a: (a.authority_type, a.source, a.sha256)))
+        # ASN -> asn_organization enrichment sources (network-registration text).
+        # These never enter ``authorities``: they are not identity evidence and
+        # they never resolve an organization.
+        self.asn_organization_authorities = tuple(
+            sorted(asn_organization_authorities, key=lambda a: (a.source, a.sha256))
+        )
         self._compiled = {
             rule["rule_id"]: re.compile(rule["pattern"], re.IGNORECASE)
             for rule in self.rules if rule["operator"] == "regex"
@@ -40,11 +57,15 @@ class AttributionEngine:
         self._build_authority_indexes()
 
     @classmethod
-    def from_repository_defaults(cls, authorities: Iterable[LoadedAuthority] = ()) -> "AttributionEngine":
+    def from_repository_defaults(
+        cls,
+        authorities: Iterable[LoadedAuthority] = (),
+        asn_organization_authorities: Iterable[AsnOrganizationAuthority] = (),
+    ) -> "AttributionEngine":
         root = Path(__file__).resolve().parents[2]
         rule_root = root / "rules"
         paths = [rule_root / name for name in ("categories.yaml", "organization_patterns.yaml", "domain_patterns.yaml")]
-        return cls(load_rules(paths), authorities)
+        return cls(load_rules(paths), authorities, asn_organization_authorities)
 
     @staticmethod
     def _canonical_domain(value: object) -> str:
@@ -240,7 +261,11 @@ class AttributionEngine:
                 provenance[key] = rule[key]
         return provenance
 
-    def _rule_evidence(self, record: NormalizedHunterRecord) -> list[Evidence]:
+    def _rule_evidence(
+        self,
+        record: NormalizedHunterRecord,
+        asn_organization_provenance: dict[str, Any] | None = None,
+    ) -> list[Evidence]:
         found: list[Evidence] = []
         for rule in self.rules:
             value = getattr(record, rule["field"])
@@ -252,6 +277,12 @@ class AttributionEngine:
             target = rule["target"]
             organization = rule.get("organization") if target == "organization_identity" else None
             infrastructure = rule.get("organization") if target == "infrastructure" else None
+            provenance = self._rule_provenance(rule)
+            if rule["field"] == "asn_organization" and asn_organization_provenance is not None:
+                # Field-local provenance: how did this ``asn_organization`` value
+                # reach the rule? A record-sourced value is not overwritten by the
+                # enrichment, but the corroborating dated authority is still recorded.
+                provenance["asn_organization_enrichment"] = dict(asn_organization_provenance)
             found.append(Evidence(
                 rule_id=rule["rule_id"],
                 rule_family=RULE_FAMILY_BY_FIELD[rule["field"]],
@@ -267,11 +298,68 @@ class AttributionEngine:
                 resolved_category=rule.get("resolved_category"),
                 infrastructure_organization=infrastructure,
                 notes=rule["notes"],
-                provenance=self._rule_provenance(rule),
+                provenance=provenance,
             ))
         return found
 
+    def _enrich_asn_organization(
+        self, record: NormalizedHunterRecord
+    ) -> tuple[NormalizedHunterRecord, dict[str, Any] | None]:
+        """Populate ``asn_organization`` from reviewed ASN-organization sources.
+
+        Safety contract (see ``docs/METHOD.md`` section 8.3):
+
+        - no reviewed source matches, or the record has no ASN -> unchanged;
+        - record value absent -> the reviewed enrichment value is used;
+        - record value present and canonically equal -> accepted unchanged;
+        - record value present and different -> fail closed, never fuzzy-reconciled;
+        - two reviewed sources disagreeing for one ASN -> fail closed.
+
+        The enrichment never creates organization identity: it only fills the
+        field-local text that existing ``asn_org_regex`` category/infrastructure
+        rules already consume.
+        """
+        if not self.asn_organization_authorities or record.asn is None:
+            return record, None
+
+        matched = [
+            (authority, row)
+            for authority in self.asn_organization_authorities
+            if (row := authority.lookup(record.asn)) is not None
+        ]
+        if not matched:
+            return record, None
+
+        distinct = {canonical_organization_name(row.asn_organization) for _, row in matched}
+        if len(distinct) > 1:
+            raise AsnOrganizationEnrichmentConflict(
+                f"Reviewed ASN-organization sources disagree for ASN {record.asn}: "
+                + ", ".join(sorted(row.asn_organization for _, row in matched))
+            )
+
+        authority, row = matched[0]
+        if record.asn_organization:
+            if not agreement_ok(record.asn_organization, row.asn_organization):
+                raise AsnOrganizationEnrichmentConflict(
+                    f"ASN {record.asn} has a Hunter record asn_organization "
+                    f"{record.asn_organization!r} that disagrees with reviewed "
+                    f"{authority.source} value {row.asn_organization!r}"
+                )
+            origin = "record"
+            enriched = record
+        else:
+            origin = "enrichment"
+            enriched = replace(record, asn_organization=row.asn_organization)
+
+        provenance = authority.enrichment_provenance(row)
+        provenance["origin"] = origin
+        provenance["observed_value"] = enriched.asn_organization
+        return enriched, provenance
+
     def attribute(self, record: NormalizedHunterRecord) -> AttributionResult:
-        evidence = self._authority_evidence(record) + self._rule_evidence(record)
+        enriched, asn_organization_provenance = self._enrich_asn_organization(record)
+        evidence = self._authority_evidence(enriched) + self._rule_evidence(
+            enriched, asn_organization_provenance
+        )
         ordered = tuple(sorted(evidence, key=lambda e: (e.rule_id, e.rule_family, e.matched_field, e.observed_value)))
-        return AttributionResult("1.2.0", record, ordered, resolve(ordered, record))
+        return AttributionResult("1.2.0", enriched, ordered, resolve(ordered, enriched))

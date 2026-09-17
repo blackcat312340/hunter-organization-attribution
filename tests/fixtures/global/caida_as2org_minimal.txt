@@ -1,0 +1,28 @@
+# name: AS Org
+# date: 202601
+# program start time: 2026-01-07 01:12:41
+# file creation time: 2026-01-07 01:21:07
+# exe:build-as_org2info.pl
+#    argument: -w families.txt
+#    argument: -B 20260101.as-org2info.txt
+#    argument: -D 202601
+#    argument: /data/external/whois-database-dumps/202601/20260101.delegated-arin-extended.txt.gz
+# format:org_id|changed|org_name|country|source
+EXU-1-ARIN|20240101|Example University|US|ARIN
+EXG-2-ARIN|20240101|Example Government Ministry|US|ARIN
+EXA-3-ARIN|20240101|Amazon.com, Inc.|US|ARIN
+EXC-4-RIPE|20240101|Example Backbone Telecom|NL|RIPE
+EXZ-5-ARIN|20240101|   |US|ARIN
+# format:aut|changed|aut_name|org_id|opaque_id|source
+64500|20240101|EXU-AS|EXU-1-ARIN|opaque-exu|ARIN
+64501|20240101|EXG-AS|EXG-2-ARIN|opaque-exg|ARIN
+64502|20240101|EXA-AS|EXA-3-ARIN|opaque-exa|ARIN
+64503|20240101|EXC-AS|EXC-4-RIPE|opaque-exc|RIPE
+64504|20240101|EXZ-AS|EXZ-5-ARIN|opaque-exz|ARIN
+64505|20240101|MISSING-REF-AS|NOPE-99-ARIN|opaque-missing|ARIN
+64506|20240101|EXU-AS-REREG|EXU-1-ARIN|opaque-exu-2|ARIN
+64507|20240101|DUP-AS-A|EXU-1-ARIN|opaque-dup-a|ARIN
+64507|20240101|DUP-AS-A|EXU-1-ARIN|opaque-dup-b|ARIN
+64508|20240101|CONFLICT-AS-A|EXU-1-ARIN|opaque-cfl-a|ARIN
+64508|20240101|CONFLICT-AS-B|EXC-4-RIPE|opaque-cfl-b|RIPE
+NOTANASN|20240101|MALFORMED-AS|EXU-1-ARIN|opaque-bad|ARIN

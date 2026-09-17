@@ -1,15 +1,30 @@
 *.csv
 *.tsv
 *.zip
+*.gz
+*.bz2
 *.jsonl
+*.ndjson
 *.parquet
 *.xlsx
+
+# Real external authority dumps and Hunter snapshots are never committed.
+# Phase 5 ingests these from a temporary cache; only metadata (URL, retrieval
+# date, SHA-256, size, schema, counts) is recorded in docs.
+*.as-org2info.txt.gz
+*.as-org2info.jsonl.gz
+current-full.csv
+ripe.db.*.gz
+delegated-*.txt.gz
 
 data/
 raw/
 outputs/
 artifacts/
 private/
+
+# Minimal synthetic reviewed-source fixtures are the one deliberate exception.
+!tests/fixtures/global/*.csv
 
 .venv/
 __pycache__/

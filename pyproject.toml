@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hunter-organization-attribution"
-version = "1.4.0"
+version = "1.5.0"
 description = "Deterministic organization attribution from normalized Hunter observations"
 readme = "README.md"
 requires-python = ">=3.10"

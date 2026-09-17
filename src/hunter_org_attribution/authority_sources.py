@@ -31,7 +31,8 @@ from __future__ import annotations
 
 import csv
 import ipaddress
-from collections.abc import Iterable, Mapping, Sequence
+import json
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -41,10 +42,21 @@ from .provenance import AuthoritySourceError, LoadedAuthority, load_authority_ro
 CHINA_INSTITUTION_RANGE_ADAPTER = "reviewed-adapter:china-institution-ipv4-range:v1"
 DOMAIN_ORG_ASSOCIATION_ADAPTER = "reviewed-adapter:domain-org-association:v1"
 EXACT_IP_ORG_ASSOCIATION_ADAPTER = "reviewed-adapter:exact-ip-org-association:v1"
+GOV_DOMAIN_REGISTRY_ADAPTER = "reviewed-adapter:gov-domain-registry:v1"
+ROR_DOMAIN_AUTHORITY_ADAPTER = "reviewed-adapter:ror-domain-authority:v1"
 
 CHINA_INSTITUTION_RANGE_SOURCE_COLUMNS = ("org", "start_ip", "end_ip")
 DOMAIN_ORG_SOURCE_COLUMNS = ("domain", "org")
 EXACT_IP_ORG_SOURCE_COLUMNS = ("ip", "org")
+CISA_DOTGOV_SOURCE_COLUMNS = ("Domain name", "Organization name")
+ROR_DOMAIN_SOURCE_COLUMNS = ("id", "domains", "names")
+
+# The global .gov registrar publishes no stable organization identifier: only a
+# free-text organization name. No identifier is invented from it.
+CISA_DOTGOV_SOURCE_ID = "cisa_dotgov_data"
+
+# ROR identifiers are compared only inside their own namespace.
+ROR_NAMESPACE = "ror"
 
 _ORGANIZATION_ALIASES = ("organization", "org")
 
@@ -133,6 +145,10 @@ def _finalize(
             "out_of_scope_rows_dropped": counts.get("out_of_scope_rows", 0),
             "out_of_scope_reason": "IPv6 addresses are out of scope for the IPv4-only method",
             "duplicate_rows_removed": duplicate_rows_removed,
+            # Every adapter-specific counter (for example the ROR
+            # ``ambiguous_domain_keys_dropped``) stays visible in the authority
+            # audit so aggregate ingestion statistics are reproducible.
+            "adapter_counts": dict(sorted(counts.items())),
             "association_semantics": (
                 "reviewed/derived organization association; not an ownership, "
                 "deployment, or operational-responsibility claim"
@@ -340,4 +356,279 @@ def load_exact_ip_org_authority(
         provenance=provenance,
         counts=counts,
         duplicate_rows_removed=duplicates,
+    )
+
+
+# --------------------------------------------------------------------------
+# CISA dotgov-data (.gov registrar): direct domain identity
+# --------------------------------------------------------------------------
+
+def _canonical_authority_domain(value: object, index: int, *, drop_invalid: bool) -> str | None:
+    domain = _clean(value).lower().lstrip(".").rstrip(".")
+    if not domain:
+        return None
+    if " " in domain or "." not in domain:
+        if drop_invalid:
+            return None
+        raise AuthoritySourceError(f"Row {index} has an invalid domain: {value!r}")
+    return domain
+
+
+def adapt_cisa_dotgov(
+    source_rows: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Project the .gov registrar export into canonical ``domain`` authority rows.
+
+    The registrar asserts only that a named government organization holds a
+    registrable domain. It publishes no stable organization identifier, so
+    ``organization_id`` stays null and the free-text organization name is the
+    complete identity payload.
+
+    This adapter does not derive a government *category* from ``.gov``: identity
+    and category stay separate, and the existing category rules classify the
+    organization name independently.
+    """
+    projected: list[dict[str, Any]] = []
+    unmapped = 0
+    for index, row in enumerate(source_rows, start=1):
+        _require_columns(row, CISA_DOTGOV_SOURCE_COLUMNS, index)
+        organization = _clean(row.get("Organization name"))
+        if not organization:
+            # A registered domain with no named holder carries no association.
+            unmapped += 1
+            continue
+        domain = _canonical_authority_domain(row.get("Domain name"), index, drop_invalid=False)
+        if domain is None:
+            unmapped += 1
+            continue
+        projected.append({"domain": domain, "organization": organization})
+    return projected, {"unmapped_rows": unmapped, "out_of_scope_rows": 0}
+
+
+def load_cisa_dotgov_authority(
+    path: str | Path,
+    *,
+    expected_sha256: str = "",
+    source: str = CISA_DOTGOV_SOURCE_ID,
+    expected_rows: int | None = None,
+    provenance: Mapping[str, Any] | None = None,
+) -> LoadedAuthority:
+    """Load the reviewed CISA dotgov-data export as a direct domain authority."""
+    resolved = Path(path)
+    actual = _check_sha(resolved, expected_sha256)
+    canonical, counts = adapt_cisa_dotgov(_read_dict_rows(resolved))
+    canonical, duplicates = _project_uniquely(
+        canonical, key_columns=("domain",), kind="domains"
+    )
+    return _finalize(
+        canonical,
+        authority_type="domains",
+        source=source,
+        sha256=actual,
+        adapter=GOV_DOMAIN_REGISTRY_ADAPTER,
+        source_columns=CISA_DOTGOV_SOURCE_COLUMNS,
+        path=str(resolved),
+        expected_rows=expected_rows,
+        provenance=provenance,
+        counts=counts,
+        duplicate_rows_removed=duplicates,
+    )
+
+
+# --------------------------------------------------------------------------
+# ROR schema-v2 domains: direct research-organization domain identity
+# --------------------------------------------------------------------------
+
+def ror_identifier(ror_id: str) -> str:
+    """Namespace a ROR identifier so it is never compared across registries."""
+    return f"{ROR_NAMESPACE}:{ror_id.strip()}"
+
+
+def _ror_display_name(record: Mapping[str, Any]) -> str | None:
+    """Canonical ROR display name, without fuzzy or alias matching."""
+    names = record.get("names")
+    if not isinstance(names, Sequence) or isinstance(names, (str, bytes)):
+        return None
+    fallback: str | None = None
+    for entry in names:
+        if not isinstance(entry, Mapping):
+            continue
+        value = _clean(entry.get("value"))
+        if not value:
+            continue
+        types = entry.get("types") or ()
+        if isinstance(types, Sequence) and "ror_display" in types:
+            return value
+        fallback = fallback or value
+    return fallback
+
+
+def adapt_ror_domains(
+    source_records: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Project schema-v2 ROR records into canonical ``domain`` authority rows.
+
+    Only domains the ROR dump itself provides are ingested; no organization name
+    is ever turned into a domain, and no alias is used for fuzzy matching.
+
+    A canonical domain claimed by more than one distinct ROR identifier is
+    ``AMBIGUOUS``: the key is dropped rather than resolved by record order, and
+    the drop is counted per key as ``ambiguous_domain_keys_dropped``.
+    """
+    counts = {
+        "organizations_read": 0,
+        "organizations_without_domains": 0,
+        "domain_entries": 0,
+        "invalid_domains": 0,
+        "blank_organization_names": 0,
+        "duplicate_domain_entries": 0,
+        "ambiguous_domain_keys_dropped": 0,
+    }
+    claims: dict[str, dict[str, Any]] = {}
+    ambiguous: set[str] = set()
+
+    for index, record in enumerate(source_records, start=1):
+        counts["organizations_read"] += 1
+        ror_id = _clean(record.get("id"))
+        if not ror_id:
+            raise AuthoritySourceError(f"Record {index} is missing a ROR id")
+        domains = record.get("domains")
+        if not isinstance(domains, Sequence) or isinstance(domains, (str, bytes)):
+            domains = ()
+        if not domains:
+            counts["organizations_without_domains"] += 1
+            continue
+        organization = _ror_display_name(record)
+        if not organization:
+            counts["blank_organization_names"] += 1
+            continue
+        organization_id = ror_identifier(ror_id)
+
+        for entry in domains:
+            counts["domain_entries"] += 1
+            domain = _canonical_authority_domain(entry, index, drop_invalid=True)
+            if domain is None:
+                counts["invalid_domains"] += 1
+                continue
+            if domain in ambiguous:
+                continue
+            existing = claims.get(domain)
+            if existing is None:
+                claims[domain] = {
+                    "domain": domain,
+                    "organization": organization,
+                    "organization_id": organization_id,
+                }
+            elif existing["organization_id"] == organization_id:
+                counts["duplicate_domain_entries"] += 1
+            else:
+                # Same canonical domain, two distinct ROR identifiers: no
+                # deterministic choice exists, so the key is excluded.
+                claims.pop(domain, None)
+                ambiguous.add(domain)
+                counts["ambiguous_domain_keys_dropped"] += 1
+
+    projected = [claims[domain] for domain in sorted(claims)]
+    counts["usable_unique_domains"] = len(projected)
+    return projected, counts
+
+
+def _iter_json_objects(stream: Any, chunk_size: int = 1 << 20) -> Iterator[Any]:
+    """Yield top-level JSON values from a byte stream incrementally.
+
+    Handles both a top-level JSON array and a JSONL stream without materializing
+    the document: the published ROR dump is a ~300 MB pretty-printed array, so an
+    eager ``json.load`` would dominate the process's memory.
+    """
+    decoder = json.JSONDecoder()
+    buffer = ""
+    eof = False
+    while True:
+        index = 0
+        while index < len(buffer):
+            char = buffer[index]
+            if char in " \t\r\n,[":
+                index += 1
+                continue
+            if char == "]":
+                index += 1
+                continue
+            try:
+                value, end = decoder.raw_decode(buffer, index)
+            except ValueError:
+                break
+            index = end
+            yield value
+        buffer = buffer[index:]
+        if eof:
+            break
+        chunk = stream.read(chunk_size)
+        if chunk:
+            buffer += chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk
+        else:
+            eof = True
+    if buffer.strip() not in ("", "]"):
+        raise AuthoritySourceError("unparsed trailing ROR JSON data")
+
+
+def _iter_ror_records(path: Path) -> Iterator[dict[str, Any]]:
+    """Iterate a ROR schema-v2 dump (zip, JSON array, or JSONL), read-only.
+
+    The published archive is read in memory member-by-member; nothing is written
+    to disk and the source is never modified.
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".zip":
+        import zipfile
+
+        with zipfile.ZipFile(path) as archive:
+            members = sorted(name for name in archive.namelist() if name.endswith(".json"))
+            if not members:
+                raise AuthoritySourceError(f"{path} contains no ROR .json member")
+            with archive.open(members[0]) as stream:
+                yield from _normalize_ror_stream(_iter_json_objects(stream))
+        return
+    with path.open("rb") as stream:
+        yield from _normalize_ror_stream(_iter_json_objects(stream))
+
+
+def _normalize_ror_stream(values: Iterable[Any]) -> Iterator[dict[str, Any]]:
+    for value in values:
+        if not isinstance(value, Mapping):
+            continue
+        if "id" not in value and isinstance(value.get("items"), list):
+            # A container payload rather than a bare record list.
+            for item in value["items"]:
+                if isinstance(item, Mapping):
+                    yield dict(item)
+            continue
+        yield dict(value)
+
+
+def load_ror_domain_authority(
+    path: str | Path,
+    *,
+    expected_sha256: str = "",
+    source: str = "ror_domains",
+    expected_rows: int | None = None,
+    provenance: Mapping[str, Any] | None = None,
+) -> LoadedAuthority:
+    """Load a reviewed ROR schema-v2 dump as a direct domain identity authority."""
+    resolved = Path(path)
+    actual = _check_sha(resolved, expected_sha256)
+    canonical, counts = adapt_ror_domains(_iter_ror_records(resolved))
+    if expected_rows is not None and len(canonical) != expected_rows:
+        raise ValueError(f"Row-count mismatch: expected {expected_rows}, got {len(canonical)}")
+    return _finalize(
+        canonical,
+        authority_type="domains",
+        source=source,
+        sha256=actual,
+        adapter=ROR_DOMAIN_AUTHORITY_ADAPTER,
+        source_columns=ROR_DOMAIN_SOURCE_COLUMNS,
+        path=str(resolved),
+        expected_rows=None,
+        provenance=provenance,
+        counts=counts,
+        duplicate_rows_removed=0,
     )

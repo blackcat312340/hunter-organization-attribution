@@ -63,6 +63,9 @@ External exports whose column names do not match the canonical authority schema 
 | `reviewed-adapter:china-institution-ipv4-range:v1` | `org,start_ip,end_ip` (headerless) | `ipv4_ranges` | `organization,start_ip,end_ip` |
 | `reviewed-adapter:domain-org-association:v1` | `domain,org` | `domains` | `domain,organization` |
 | `reviewed-adapter:exact-ip-org-association:v1` | `ip,org` | `exact_ip` | `ip,organization` |
+| `reviewed-adapter:gov-domain-registry:v1` | `Domain name,Organization name` | `domains` | `domain,organization` |
+| `reviewed-adapter:ror-domain-authority:v1` | schema-v2 `id,domains[],names[]` | `domains` | `domain,organization,organization_id` |
+| `reviewed-adapter:asn-organization-text:v1` | CAIDA `org_id\|changed\|org_name\|country\|source` and `aut\|changed\|aut_name\|org_id\|opaque_id\|source` | ASN-organization enrichment (not an evidence authority) | `asn,asn_organization` (+ namespaced network organization handle) |
 
 ```python
 from hunter_org_attribution import (
@@ -86,6 +89,50 @@ Adapter behavior is fixed and fail-closed:
 Integration scope: the adapters project bytes the caller has already obtained. When an export lives inside an archive, the caller stages the exact member and supplies the archive path, member path, and member SHA-256 through `provenance` so they reach the authority audit and evidence. The China institution range export currently integrated this way is `edu-ipv4-utf8(1).csv` (SHA-256 `5ebc091a…c4dd68`, 4,968 rows); the derived association exports are `results/domain_org.csv` and `results/ip_org.csv` inside `submission_package_2026-08-13.zip`.
 
 Semantics are unchanged by adaptation: a `domains` authority still means "reviewed/derived domain-to-organization association", and an `exact_ip` authority still means "reviewed/derived exact-IP-to-organization association". Neither is an ownership, deployment, or operational-responsibility authority, and the exact-IP authority is never expanded into a subnet, CIDR block, or neighbouring-address range.
+
+## Global authority stack
+
+Three reviewed global sources may be composed into the runtime. Metadata only is recorded here; no authority content is committed.
+
+### CAIDA AS Organizations (`as2org`) — network-registration text, never identity
+
+- source: `https://data.caida.org/datasets/as-organizations/<YYYYMMDD>.as-org2info.txt.gz`
+- documented format: `org_id|changed|org_name|country|source` and `aut|changed|aut_name|org_id|opaque_id|source`
+- association: `aut.org_id -> organization.org_id -> org_name`. `aut_name` is a *network* name and is never used as the organization text.
+- runtime role: `ASN -> asn_organization` **network-registration text only**
+- loader: `load_caida_as2org_authority(...)`; composed through `AttributionEngine(..., asn_organization_authorities=[...])`
+
+CAIDA maps ASes "to the organizational entities that operate them", where the entity is the *resource holder* recorded by the originating RIR. A holder is frequently a transit provider, a hosting company, a downstream customer, or a holding entity, so this is network context, not the hosted-service organization of an observation.
+
+**CAIDA never creates organization identity.** It never sets `organization_id`, never sets `resolved_organization`, and never joins an identity cluster. Its source-local handle is preserved under the `caida-as2org` namespace as `network_organization_id` and must never be compared with, or written to, `organization_id`.
+
+Fail-closed policy: an `aut` row whose `org_id` is absent from the organization section is dropped and counted; a repeated `aut` row for one ASN naming the same organization is deduplicated and counted; a repeated `aut` row for one ASN naming *different* organizations excludes that key (`CAIDA_ASN_MAPPING_CONFLICT` at key granularity) and is counted, so one inconsistent ASN cannot poison the source. A blank `org_name` carries no registration text and is dropped and counted.
+
+### CISA dotgov-data — direct domain identity authority
+
+- source: `https://github.com/cisagov/dotgov-data` (`current-full.csv`)
+- licence: CC0 1.0; updated daily
+- scope: United States government only; registrable `.gov` domain -> government organization
+- loader: `load_cisa_dotgov_authority(...)`
+
+The registrar publishes **no stable organization identifier**, only a free-text organization name, so `organization_id` stays null and no internal "official ID" is invented. The adapter does not derive a government *category* from the `.gov` suffix: identity and category stay separate, and the existing category rules classify the organization name independently.
+
+### ROR schema-v2 domains — direct research-domain identity authority
+
+- source: ROR data dump, schema v2 JSON (`https://ror.readme.io/docs/data-dump`)
+- licence: CC0 1.0
+- scope: global research organizations, **coverage limited to records that publish `domains`**
+- loader: `load_ror_domain_authority(...)`
+
+Only domains the dump itself provides are ingested; no organization name is ever turned into a domain, and no alias is used for fuzzy matching. Identifiers are namespaced as `ror:<canonical-ror-id>` and compared only inside the `ror` namespace. A canonical domain claimed by two distinct ROR identifiers is `AMBIGUOUS`: the key is dropped rather than resolved by record order and counted as `ambiguous_domain_keys_dropped`. Organizations with empty `domains` create nothing.
+
+### Identifier namespaces
+
+Source-local identifiers use **disjoint namespaces** and are never compared, joined, or deduplicated on raw value: `caida-as2org` (`network_organization_id`), `ror`, and the RIR-scoped handles (`ARIN` `LPL-141`, `RIPE` `ORG-IS136-RIPE`, APNIC/AFRINIC equivalents, LACNIC ownerids). Reconciliation happens only through ASN or an explicit map, never through identifier text.
+
+### Not available
+
+A **global institution IP-range authority does not exist**; IPv4 institutional ranges remain country- or submission-specific. **IPv6 remains out of scope** for this IPv4-only method. ASN registration is **not** promoted to organization identity.
 
 ## Operational hygiene
 

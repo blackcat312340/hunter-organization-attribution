@@ -44,6 +44,12 @@ Every rule hit is retained as a separate evidence record. Mandatory semantic fie
 
 For LENS-derived rules, `provenance` includes source-file/symbol and archive/file SHA-256 metadata. This table is the explanation surface for “why was this IP associated with this organization/category/network?”. Evidence is never deleted merely because another rule has higher specificity.
 
+When a reviewed ASN-organization source populated or corroborated `asn_organization`, an `asn_organization` rule hit additionally carries `provenance.asn_organization_enrichment` (adapter, source, authority SHA-256, authority version, ASN, namespaced network organization handle, origin, effective value). See `docs/METHOD.md` section 12.1. This is an additive key in an existing flexible map; the schema version below is unchanged.
+
+### Enriched record field
+
+If a reviewed ASN-organization source is configured and matches the record's `asn`, `AttributionResult.record.asn_organization` carries the resolved network-registration text. The record's field set is unchanged — only a previously-null value is populated. With no such source configured, the record is returned exactly as supplied.
+
 ## AttributionResult 1.2.0
 
 - `schema_version`: `1.2.0`

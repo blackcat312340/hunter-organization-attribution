@@ -143,6 +143,31 @@ Every rule hit preserves:
 
 Structured authority provenance includes the authority digest, schema/type, row count, configured source, file path, and supplied provenance metadata. Versioned LENS-derived rules additionally preserve source path, source symbol, source-file SHA-256, archive SHA-256, and adaptation metadata where relevant.
 
+### 12.1 Field-level ASN-organization enrichment provenance
+
+`asn_organization` has no input on current Measurement 212 production records. A reviewed ASN-organization source (CAIDA AS Organizations) may populate it before rules run, so the existing field-local `asn_org_regex` category and infrastructure rules become executable.
+
+Because that value is not the observation's own text, every rule hit it triggers must be traceable to its source. Any `asn_organization` rule hit whose field was sourced or corroborated by a reviewed enrichment additionally carries, inside the evidence `provenance` map, an `asn_organization_enrichment` entry recording:
+
+- `adapter` — the stable reviewed adapter identifier
+- `source` — the configured source name
+- `authority_sha256` and `authority_version` — the exact dated artifact
+- `asn` — the key that matched
+- `network_organization_id` and `network_organization_id_namespace` — the source-local handle and its namespace
+- `origin` — `enrichment` when the enrichment supplied the value, `record` when the Hunter record already carried it and the authority merely corroborates it
+- `observed_value` — the effective value the rule ran on
+
+This is an additive key inside an already-flexible provenance map, so the serialized attribution schema version is unchanged. It answers both "why is this `asn_organization` text this value?" and "which dated authority did it come from?".
+
+**Raw value versus enrichment conflict.** A raw `asn_organization` is never silently overwritten and is never fuzzy-reconciled against a reviewed value:
+
+1. record value absent -> the reviewed enrichment value is used (`origin = enrichment`);
+2. record value present and canonically equal (whitespace-collapsed, case-folded) -> accepted unchanged (`origin = record`);
+3. record value present and different -> fail closed with an explicit enrichment conflict;
+4. two reviewed enrichment sources disagreeing for one ASN -> fail closed with an explicit enrichment conflict.
+
+**CAIDA is not an identity authority.** Populating `asn_organization` does not create organization identity. The value may enable *category* evidence (`education_research`, `government`, ...) and *infrastructure* evidence (cloud, ISP, ...) through the existing field-local rules, and nothing else. It never sets `organization_id`, never sets `resolved_organization`, and never contributes to `multi_rule`. The source-local handle is preserved under the `caida-as2org` namespace and is never written to, or compared against, `organization_id`.
+
 ## 13. External authority validation
 
 Each external authority load requires local `path`, `expected_sha256`, authority type/schema, source name, optional expected row count, and provenance metadata.
@@ -177,3 +202,6 @@ The method does **not** by itself establish that the organization deployed the s
 - ASN data primarily identify routing/network context; only explicitly organization-role authority rows may resolve identity.
 - Historical ownership, shared hosting, compromised hosts, reverse proxies, CDN origins, legal ownership, and operational control may diverge from association evidence.
 - The method does not claim global completeness and performs no network queries.
+- Direct identity coverage remains partial: the global `.gov` registrar is US-only, and ROR domain coverage reaches only the organizations whose dump records publish `domains`. Ambiguous shared domains are excluded rather than resolved.
+- `asn_organization` text is network-registration context. It improves category and infrastructure evidence and does **not** improve identity coverage.
+- No global institution IP-range authority exists; IPv4 institutional ranges remain country- or submission-specific.
