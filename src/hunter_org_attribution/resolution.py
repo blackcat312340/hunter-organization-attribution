@@ -35,17 +35,34 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
             identities[key].append(item)
             identity_evidence.append(item)
 
-    categories = tuple(sorted({e.resolved_category for e in evidence if e.resolved_category}))
-    infrastructure = tuple(sorted({e.infrastructure_organization for e in evidence if e.infrastructure_organization}))
+    organization_categories = tuple(sorted({
+        e.resolved_category
+        for e in evidence
+        if e.resolved_category and e.target in {"organization_identity", "organization_category"}
+    }))
+    infrastructure = tuple(sorted({
+        e.infrastructure_organization
+        for e in evidence
+        if e.infrastructure_organization
+    }))
+    infrastructure_category_values = {
+        e.resolved_category
+        for e in evidence
+        if e.resolved_category and e.target == "infrastructure"
+    }
+    if record.infrastructure_category:
+        infrastructure_category_values.add(record.infrastructure_category)
+    infrastructure_categories = tuple(sorted(infrastructure_category_values))
 
     if not identities:
-        status = "category_only" if categories else "unresolved"
+        status = "category_only" if organization_categories else "unresolved"
         return Resolution(
             organization_id=None,
             organization_name=None,
-            categories=categories,
+            categories=organization_categories,
             association_types=_association_types(evidence, add_multi_rule=False),
             infrastructure_organizations=infrastructure,
+            infrastructure_categories=infrastructure_categories,
             infrastructure_category=record.infrastructure_category,
             provider_family=record.provider_family,
             ambiguity_status="no_identity",
@@ -59,9 +76,10 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
         return Resolution(
             organization_id=None,
             organization_name=None,
-            categories=categories,
+            categories=organization_categories,
             association_types=_association_types(evidence, add_multi_rule=False),
             infrastructure_organizations=infrastructure,
+            infrastructure_categories=infrastructure_categories,
             infrastructure_category=record.infrastructure_category,
             provider_family=record.provider_family,
             ambiguity_status="ambiguous_conflict",
@@ -76,9 +94,10 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
     return Resolution(
         organization_id=organization_id,
         organization_name=organization_name,
-        categories=categories,
+        categories=organization_categories,
         association_types=_association_types(evidence, add_multi_rule=agreeing_identity_rules > 1),
         infrastructure_organizations=infrastructure,
+        infrastructure_categories=infrastructure_categories,
         infrastructure_category=record.infrastructure_category,
         provider_family=record.provider_family,
         ambiguity_status="unambiguous",
