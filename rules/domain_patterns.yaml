@@ -1,11 +1,16 @@
-schema_version: 1
+schema_version: 2
 rules:
-  - rule_id: lens.category.education_research.root_domain
+  - rule_id: adaptation.category.education_research.root_domain
     target: organization_category
     field: root_domain
     operator: regex
-    pattern: '(?:\.edu(?:\.[a-z]{2})?$|\.ac\.[a-z]{2}$)'
+    pattern: '\.edu(?:\.[a-z]{2})?$'
     resolved_category: education_research
-    source: LENS-20260602
-    notes: Hunter root-domain form of LENS .edu classification; does not invent an institution.
-
+    source: method-adaptation
+    source_reference: LENS-20260602:EDU_RESEARCH_PAT
+    source_path: utils/cn_org_ip_stats.py
+    source_symbol: EDU_RESEARCH_PAT
+    source_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+    archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+    adaptation: terminal/root-domain form of the source `.edu.` signal for normalized Hunter root domains
+    notes: Category-only adaptation; it does not invent an institution identity and does not add unrelated `.ac` semantics.
