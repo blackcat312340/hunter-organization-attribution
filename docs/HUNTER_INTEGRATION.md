@@ -23,6 +23,8 @@ The lookup summary records 11,488 ASN rows and confirms that it is an aggregate-
 
 The existing 796-IP institutional export at the same source commit is supporting compatibility evidence, not an input to this repository. Its master table uses numeric `primary_asn` together with `primary_infrastructure_category` and `primary_provider_family`; the reviewed example rows have no ASN organization text. This is consistent with the narrower lookup contract below and does not justify synthesizing `asn_organization`.
 
+A separately archived Hunter/Spark construction script was also reviewed during the Phase 2 compatibility audit. Its fixed stored-output projection contains `is_web`, `city`, `updated_at`, and `banner_info` in addition to fields already consumed by the Measurement 212 reader. That archived script is not a versioned repository authority, so these four names are admitted only as **known ignored compatibility fields**. They are not promoted to attribution inputs and they do not advance any source-pinned authority constant.
+
 ## Raw Hunter projection
 
 The reviewed production reader directly accesses these fields that are relevant to organization attribution:
@@ -42,18 +44,25 @@ The integration layer uses `project_measurement212_hunter_record()` to copy only
 
 ## Explicit non-attribution fields
 
-The same production reader also uses fields for service identification, fingerprint replay, or transport metadata:
+Reviewed production or stored-output fields that may be present but must not become organization-attribution evidence are:
 
 - `full_name`
 - `http_head`
 - `protocol_type`
 - `favicon`
+- `is_web`
+- `city`
+- `updated_at`
+- `banner_info`
 
-They are deliberately recognized as production fields but are never projected into `NormalizedHunterRecord`. In particular:
+They are recognized by the production projection but never copied into `NormalizedHunterRecord`. In particular:
 
 - `full_name` is a service/repository label in Measurement 212, not organization identity;
 - `favicon` and `web_title` may participate in the separate service-fingerprint workflow, but only `web_title` is a reviewed organization-category textual signal in this method;
-- `http_head` and `protocol_type` do not become organization evidence.
+- `http_head`, `protocol_type`, `is_web`, `city`, and `banner_info` do not become organization evidence;
+- upstream `updated_at` is not automatically mapped to `observed_at`: the former is asset metadata, while the latter is explicit observation/snapshot provenance supplied by the caller.
+
+The archived construction script also reads `web_body` for upstream fingerprint matching but explicitly omits it from the fixed stored output. Therefore `web_body` remains outside this production contract and still fails closed if it appears in strict projection input.
 
 The projection result records the names of known fields it consumed and explicitly ignored. It never copies ignored field values into attribution evidence.
 

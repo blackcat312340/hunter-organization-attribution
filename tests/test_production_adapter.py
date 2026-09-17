@@ -14,11 +14,15 @@ def production_row(**overrides):
         "host": "https://lab.example.edu:8443",
         "web_title": "Example Research Portal",
         "country": "US",
-        # Verified production fields used for service/fingerprint analysis only.
+        # Reviewed production fields that are deliberately not attribution inputs.
         "full_name": "example/service",
         "http_head": "HTTP/1.1 200 OK\r\nServer: example\r\n",
         "protocol_type": "https",
         "favicon": "deadbeef",
+        "is_web": True,
+        "city": "Example City",
+        "updated_at": "2026-04-29T17:30:00Z",
+        "banner_info": "opaque upstream metadata",
     }
     row.update(overrides)
     return row
@@ -39,10 +43,36 @@ def test_production_projection_consumes_only_reviewed_attribution_fields():
     assert projection.unknown_fields == ()
 
     assert set(projection.ignored_known_fields) == {
-        "favicon", "full_name", "http_head", "protocol_type"
+        "banner_info",
+        "city",
+        "favicon",
+        "full_name",
+        "http_head",
+        "is_web",
+        "protocol_type",
+        "updated_at",
     }
     for field in projection.ignored_known_fields:
         assert not hasattr(record, field)
+
+
+def test_upstream_updated_at_is_not_observation_provenance():
+    projection = project_measurement212_hunter_record(
+        production_row(updated_at="2026-04-29T17:30:00Z")
+    )
+    assert projection.record.observed_at is None
+    assert "updated_at" in projection.ignored_known_fields
+
+    explicit = project_measurement212_hunter_record(
+        production_row(updated_at="2026-04-29T17:30:00Z"),
+        observed_at="2026-04-30",
+    )
+    assert explicit.record.observed_at == "2026-04-30"
+
+
+def test_upstream_matching_only_web_body_remains_outside_stored_contract():
+    with pytest.raises(ValueError, match="Unreviewed Measurement 212 Hunter fields: web_body"):
+        project_measurement212_hunter_record(production_row(web_body="must-not-enter-attribution"))
 
 
 def test_service_label_cannot_become_organization_evidence():
