@@ -73,8 +73,10 @@ def _nonempty_keys(raw: Mapping[str, object], allowed: frozenset[str]) -> tuple[
 
 
 def _validate_enrichment_asn(raw: Mapping[str, object], enrichment: Mapping[str, object]) -> None:
-    if raw.get("asn") in (None, "") or enrichment.get("asn") in (None, ""):
-        return
+    if raw.get("asn") in (None, ""):
+        raise ValueError("ASN enrichment requires a Hunter record ASN")
+    if enrichment.get("asn") in (None, ""):
+        raise ValueError("ASN enrichment row is missing its ASN key")
     raw_asn = normalize_asn(raw.get("asn"))
     enrichment_asn = normalize_asn(enrichment.get("asn"))
     if raw_asn != enrichment_asn:
