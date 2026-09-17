@@ -71,6 +71,7 @@ class Resolution:
     categories: tuple[str, ...]
     association_types: tuple[str, ...]
     infrastructure_organizations: tuple[str, ...]
+    infrastructure_categories: tuple[str, ...]
     infrastructure_category: str | None
     provider_family: str | None
     ambiguity_status: Literal["no_identity", "unambiguous", "ambiguous_conflict"]
