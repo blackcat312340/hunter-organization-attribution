@@ -4,6 +4,9 @@ import ipaddress
 from urllib.parse import urlsplit
 
 
+MAX_ASN = 4_294_967_295
+
+
 def clean_text(value: object) -> str | None:
     if value is None:
         return None
@@ -49,8 +52,8 @@ def normalize_asn(value: object) -> int | None:
     if text.upper().startswith("AS"):
         text = text[2:]
     asn = int(text)
-    if asn <= 0:
-        raise ValueError("ASN must be positive")
+    if not 1 <= asn <= MAX_ASN:
+        raise ValueError(f"ASN must be between 1 and {MAX_ASN}")
     return asn
 
 
