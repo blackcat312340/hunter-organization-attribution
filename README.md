@@ -6,7 +6,7 @@ Phase 1 freezes the method, schemas, rules, provenance controls, and synthetic t
 
 The normative method contract is [`docs/METHOD.md`](docs/METHOD.md). Verified LENS provenance and rule migration are documented in [`docs/LENS_RULE_MIGRATION.md`](docs/LENS_RULE_MIGRATION.md). The production Hunter interface and small-sample gate are documented in [`docs/HUNTER_INTEGRATION.md`](docs/HUNTER_INTEGRATION.md).
 
-Package version `1.3.0` adds the production-integration API; the serialized attribution-result schema remains `1.2.0` because its evidence/resolution contract is unchanged.
+Package version `1.3.1` contains the production-integration API plus the reviewed stored-output metadata compatibility fix; the serialized attribution-result schema remains `1.2.0` because its evidence/resolution contract is unchanged.
 
 ## Quick start
 
