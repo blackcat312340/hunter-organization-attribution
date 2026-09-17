@@ -225,6 +225,21 @@ class AttributionEngine:
                     raise ValueError(f"Invalid ASN role in {rule_id}: {role}")
         return found
 
+    @staticmethod
+    def _rule_provenance(rule: dict[str, Any]) -> dict[str, Any]:
+        provenance = {"rule_source": rule["source"]}
+        for key in (
+            "source_path",
+            "source_symbol",
+            "source_sha256",
+            "archive_sha256",
+            "source_reference",
+            "adaptation",
+        ):
+            if rule.get(key) is not None:
+                provenance[key] = rule[key]
+        return provenance
+
     def _rule_evidence(self, record: NormalizedHunterRecord) -> list[Evidence]:
         found: list[Evidence] = []
         for rule in self.rules:
@@ -252,11 +267,11 @@ class AttributionEngine:
                 resolved_category=rule.get("resolved_category"),
                 infrastructure_organization=infrastructure,
                 notes=rule["notes"],
-                provenance={"rule_source": rule["source"]},
+                provenance=self._rule_provenance(rule),
             ))
         return found
 
     def attribute(self, record: NormalizedHunterRecord) -> AttributionResult:
         evidence = self._authority_evidence(record) + self._rule_evidence(record)
         ordered = tuple(sorted(evidence, key=lambda e: (e.rule_id, e.rule_family, e.matched_field, e.observed_value)))
-        return AttributionResult("1.1.0", record, ordered, resolve(ordered, record))
+        return AttributionResult("1.2.0", record, ordered, resolve(ordered, record))
