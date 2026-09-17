@@ -11,7 +11,7 @@ from .resolution import resolve
 from .rules.loader import load_rules
 
 
-RULE_TYPE_BY_FIELD = {
+RULE_FAMILY_BY_FIELD = {
     "asn_organization": "asn_org_regex",
     "root_domain": "domain_regex",
     "domain": "domain_regex",
@@ -48,31 +48,82 @@ class AttributionEngine:
             return folded == suffix or folded.endswith("." + suffix)
         return False
 
+    @staticmethod
+    def _structured_evidence(
+        *,
+        rule_id: str,
+        rule_family: str,
+        matched_field: str,
+        observed_value: str,
+        operator: str,
+        pattern: str,
+        authority: LoadedAuthority,
+        row: dict[str, Any],
+        target: str = "organization_identity",
+        infrastructure_organization: str | None = None,
+    ) -> Evidence:
+        return Evidence(
+            rule_id=rule_id,
+            rule_family=rule_family,
+            target=target,
+            matched_field=matched_field,
+            observed_value=observed_value,
+            operator=operator,
+            pattern=pattern,
+            source=authority.source,
+            authority=authority.authority_type,
+            resolved_organization_id=(str(row["organization_id"]) if row.get("organization_id") else None),
+            resolved_organization=(str(row["organization"]) if target == "organization_identity" else None),
+            resolved_category=(str(row["category"]) if row.get("category") else None),
+            infrastructure_organization=infrastructure_organization,
+            notes=(str(row["notes"]) if row.get("notes") else None),
+            provenance={**authority.audit, "authority_sha256": authority.sha256},
+        )
+
     def _authority_evidence(self, record: NormalizedHunterRecord) -> list[Evidence]:
         found: list[Evidence] = []
         address = ipaddress.ip_address(record.ip)
         for authority in self.authorities:
-            provenance = {**authority.audit, "authority_sha256": authority.sha256}
             for index, row in enumerate(authority.rows, start=1):
                 rule_id = str(row.get("rule_id") or f"{authority.source}:{authority.authority_type}:{index}")
-                category = row.get("category") or None
                 if authority.authority_type == "ipv4_ranges":
                     start, end = ipaddress.ip_address(row["start_ip"]), ipaddress.ip_address(row["end_ip"])
                     if start <= address <= end:
-                        found.append(Evidence(rule_id, "direct_range", "ip", record.ip, f"{start}-{end}", authority.source, str(row["organization"]), category, provenance=provenance))
+                        found.append(self._structured_evidence(
+                            rule_id=rule_id, rule_family="direct_range", matched_field="ip",
+                            observed_value=record.ip, operator="contains", pattern=f"{start}-{end}",
+                            authority=authority, row=row,
+                        ))
                 elif authority.authority_type == "exact_ip" and record.ip == str(row["ip"]):
-                    found.append(Evidence(rule_id, "exact_ip_mapping", "ip", record.ip, str(row["ip"]), authority.source, str(row["organization"]), category, provenance=provenance))
+                    found.append(self._structured_evidence(
+                        rule_id=rule_id, rule_family="exact_ip_mapping", matched_field="ip",
+                        observed_value=record.ip, operator="equals", pattern=str(row["ip"]),
+                        authority=authority, row=row,
+                    ))
                 elif authority.authority_type == "domains":
                     observed = record.root_domain or record.domain
                     expected = str(row["domain"]).lower().lstrip(".")
                     if observed and (observed == expected or observed.endswith("." + expected)):
-                        found.append(Evidence(rule_id, "official_domain", "root_domain", observed, expected, authority.source, str(row["organization"]), category, provenance=provenance))
+                        found.append(self._structured_evidence(
+                            rule_id=rule_id, rule_family="official_domain", matched_field="root_domain",
+                            observed_value=observed, operator="suffix", pattern=expected,
+                            authority=authority, row=row,
+                        ))
                 elif authority.authority_type == "asn" and record.asn == int(str(row["asn"]).upper().removeprefix("AS")):
                     role = str(row["role"]).lower()
                     if role == "organization":
-                        found.append(Evidence(rule_id, "organization_asn", "asn", str(record.asn), str(row["asn"]), authority.source, str(row["organization"]), category, provenance=provenance))
+                        found.append(self._structured_evidence(
+                            rule_id=rule_id, rule_family="organization_asn", matched_field="asn",
+                            observed_value=str(record.asn), operator="equals", pattern=str(row["asn"]),
+                            authority=authority, row=row,
+                        ))
                     elif role in {"infrastructure", "network"}:
-                        found.append(Evidence(rule_id, "organization_asn", "asn", str(record.asn), str(row["asn"]), authority.source, resolved_category=category, infrastructure_organization=str(row["organization"]), provenance=provenance))
+                        found.append(self._structured_evidence(
+                            rule_id=rule_id, rule_family="organization_asn", matched_field="asn",
+                            observed_value=str(record.asn), operator="equals", pattern=str(row["asn"]),
+                            authority=authority, row=row, target="infrastructure",
+                            infrastructure_organization=str(row["organization"]),
+                        ))
                     else:
                         raise ValueError(f"Invalid ASN role in {rule_id}: {role}")
         return found
@@ -91,19 +142,24 @@ class AttributionEngine:
             infrastructure = rule.get("organization") if target == "infrastructure" else None
             found.append(Evidence(
                 rule_id=rule["rule_id"],
-                rule_type=RULE_TYPE_BY_FIELD[rule["field"]],
+                rule_family=RULE_FAMILY_BY_FIELD[rule["field"]],
+                target=target,
                 matched_field=rule["field"],
                 observed_value=observed,
-                matched_pattern=rule["pattern"],
-                authority=rule["source"],
+                operator=rule["operator"],
+                pattern=rule["pattern"],
+                source=rule["source"],
+                authority=rule.get("authority", "repository_rule_catalog"),
+                resolved_organization_id=rule.get("organization_id"),
                 resolved_organization=organization,
                 resolved_category=rule.get("resolved_category"),
                 infrastructure_organization=infrastructure,
-                provenance={"notes": rule["notes"]},
+                notes=rule["notes"],
+                provenance={"rule_source": rule["source"]},
             ))
         return found
 
     def attribute(self, record: NormalizedHunterRecord) -> AttributionResult:
         evidence = self._authority_evidence(record) + self._rule_evidence(record)
-        ordered = tuple(sorted(evidence, key=lambda e: (e.rule_id, e.rule_type, e.matched_field, e.observed_value)))
-        return AttributionResult("1.0.0", record, ordered, resolve(ordered))
+        ordered = tuple(sorted(evidence, key=lambda e: (e.rule_id, e.rule_family, e.matched_field, e.observed_value)))
+        return AttributionResult("1.1.0", record, ordered, resolve(ordered, record))
