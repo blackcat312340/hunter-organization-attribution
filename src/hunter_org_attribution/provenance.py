@@ -11,6 +11,8 @@ from typing import Any
 import yaml
 
 
+MAX_ASN = 4_294_967_295
+
 AUTHORITY_SCHEMAS = {
     "ipv4_ranges": {"start_ip", "end_ip", "organization"},
     "exact_ip": {"ip", "organization"},
@@ -84,7 +86,7 @@ def _validate_row(authority_type: str, row: dict[str, Any], index: int) -> None:
             raise ValueError(f"Row {index} has invalid domain")
     elif authority_type == "asn":
         asn = int(str(row["asn"]).upper().removeprefix("AS"))
-        if asn <= 0:
+        if not 1 <= asn <= MAX_ASN:
             raise ValueError(f"Row {index} has invalid ASN")
         role = str(row["role"]).strip().lower()
         if role not in {"organization", "infrastructure", "network"}:
