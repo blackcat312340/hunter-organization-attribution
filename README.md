@@ -1,13 +1,10 @@
 # Hunter Organization Attribution
 
-Frozen, deterministic organization-attribution method whose only operational
-input is a normalized Hunter observation. FOFA and LENS are not runtime
-dependencies. `LENS-20260602` is a methodology and rule reference only.
+Frozen, deterministic organization-attribution method whose only operational input is a normalized Hunter observation. FOFA and LENS are not runtime dependencies; `LENS-20260602` is a source-verified methodology/rule reference only.
 
-Phase 1 freezes the method, schemas, rules, provenance controls, and synthetic
-tests. It does **not** process Measurement-212.
+Phase 1 freezes the method, schemas, rules, provenance controls, and synthetic tests. It does **not** process Measurement 212 or create paper findings.
 
-See [`docs/METHOD.md`](docs/METHOD.md), the authority for future reuse.
+The verified LENS archive/source provenance, executable classifier migration, and reference-only sensitive-rule inventory are documented in [`docs/LENS_RULE_MIGRATION.md`](docs/LENS_RULE_MIGRATION.md). The normative method contract is [`docs/METHOD.md`](docs/METHOD.md).
 
 ## Quick start
 
@@ -30,6 +27,4 @@ record = normalize_hunter_record({
 result = AttributionEngine.from_repository_defaults().attribute(record)
 ```
 
-External authorities are supplied at runtime with an expected SHA-256 and are
-never bundled. See [`examples/attribute_record.py`](examples/attribute_record.py).
-
+External authorities are supplied at runtime with an expected SHA-256 and are never bundled. See [`examples/attribute_record.py`](examples/attribute_record.py).
