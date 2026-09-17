@@ -1,16 +1,19 @@
 # LENS-20260602 Rule Migration
 
-This document freezes the Phase 1 migration inventory from `LENS-20260602` into the Hunter organization-attribution method. LENS/FOFA is a methodology and rule source only; it is never a runtime dependency and its output labels are never imported as attribution truth.
+This document records the Phase 1 migration inventory from `LENS-20260602` into the Hunter organization-attribution method. LENS/FOFA is a methodology and rule source only; it is never a runtime dependency and its output labels are never imported as attribution truth.
 
 ## Source archive provenance
 
 - archive: `LENS-20260602.zip`
 - recorded SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
 - reviewed implementation recorded by the initial freeze: `utils/cn_org_ip_stats.py`
+- migration review date: `2026-09-17`
 - runtime dependency: **none**
 - archive committed to this repository: **no** (`*.zip` is ignored)
 
-The digest above is inherited from the initial Phase 1 freeze commit. This review did not have the archive bytes available to re-hash independently; therefore a future archive re-materialization must verify this digest before changing the migration inventory.
+The digest above is inherited from the initial Phase 1 freeze commit. This review did not have the archive bytes available to re-hash independently. The currently accessible preserved task notes also state that LENS contains an `SOE` category family, but they do not contain the source expression needed to migrate it faithfully. Therefore this document must not claim complete source-level parity with LENS until the archive is re-materialized and verified.
+
+A future archive re-materialization must first verify the recorded digest, then compare the original classifier implementation rule by rule against this inventory. No missing rule may be reconstructed from memory or a category name alone.
 
 ## Migration principle
 
@@ -32,12 +35,12 @@ Organization identity and organization category remain separate. Category regexe
 
 Unsupported fields must never be synthesized from other Hunter values.
 
-## Frozen rule inventory
+## Current repository rule inventory
 
-Phase 1 contains **15 inventory entries** derived from `LENS-20260602`:
+The repository currently contains **15 LENS-derived inventory entries**:
 
 - **12 executable rules**
-- **3 documentation-only unsupported rules**
+- **3 documentation-only unsupported-field rules**
 
 Executable rules by repository file:
 
@@ -56,9 +59,22 @@ Unsupported inventory entries in `rules/categories.yaml`:
 
 All executable migrated rules carry `source: LENS-20260602` and retain a rule-specific note describing the adaptation.
 
+## Known source-verification gap
+
+The preserved Phase 1 task context states that the LENS classifier also contains an **SOE** category family. The exact original field combination, expression, and exclusions are not present in the accessible material. Because the archive bytes are unavailable in this review session, no executable SOE rule is added here.
+
+Status:
+
+- known LENS family: `SOE`
+- current repository migration: **not yet source-verified**
+- executable rule fabricated from summary text: **no**
+- required action before claiming complete LENS migration: verify `LENS-20260602.zip` SHA-256 and inspect the original classifier implementation
+
+This is a provenance/completeness gate, not a reason to import LENS output labels directly.
+
 ## Migrated semantic families
 
-The frozen executable migration covers:
+The currently verified executable migration covers:
 
 - education/research terms derived from the recorded LENS education/research classifier, including CERNET, education-and-research wording, `.edu`/academic-domain signals, university/college, academy-of-sciences, CNIC-CAS, and Chinese equivalents;
 - government domain-category signals;
@@ -79,6 +95,8 @@ Phase 1 does not migrate:
 - any label produced only because an IP appeared in a LENS output table;
 - any rule requiring `body`, `server`, or `app` until Hunter supplies a reviewed semantically equivalent field.
 
+These deliberate non-migrations are distinct from the unresolved SOE source-verification gap above.
+
 ## Review gate before modifying this inventory
 
 Any future change must record:
@@ -89,3 +107,5 @@ Any future change must record:
 4. whether the rule targets identity, category, or infrastructure;
 5. supported/unsupported runtime status;
 6. synthetic tests demonstrating false-positive controls and organization/infrastructure separation.
+
+Phase 1 may freeze the method implementation independently, but it must not label the LENS migration as source-complete until the archive gate is closed.
