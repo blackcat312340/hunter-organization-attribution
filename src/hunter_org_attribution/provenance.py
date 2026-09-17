@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import ipaddress
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +63,34 @@ def _read_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _validate_row(authority_type: str, row: dict[str, Any], index: int) -> None:
+    required = AUTHORITY_SCHEMAS[authority_type]
+    missing = sorted(key for key in required if row.get(key) in (None, ""))
+    if missing:
+        raise ValueError(f"Row {index} missing required fields: {', '.join(missing)}")
+
+    if authority_type == "ipv4_ranges":
+        start = ipaddress.ip_address(str(row["start_ip"]))
+        end = ipaddress.ip_address(str(row["end_ip"]))
+        if start.version != 4 or end.version != 4 or start > end:
+            raise ValueError(f"Row {index} has invalid IPv4 range")
+    elif authority_type == "exact_ip":
+        address = ipaddress.ip_address(str(row["ip"]))
+        if address.version != 4:
+            raise ValueError(f"Row {index} must contain IPv4")
+    elif authority_type == "domains":
+        domain = str(row["domain"]).strip().lower().lstrip(".").rstrip(".")
+        if not domain or " " in domain or "." not in domain:
+            raise ValueError(f"Row {index} has invalid domain")
+    elif authority_type == "asn":
+        asn = int(str(row["asn"]).upper().removeprefix("AS"))
+        if asn <= 0:
+            raise ValueError(f"Row {index} has invalid ASN")
+        role = str(row["role"]).strip().lower()
+        if role not in {"organization", "infrastructure", "network"}:
+            raise ValueError(f"Row {index} has invalid ASN role: {role}")
+
+
 def load_authority(spec: AuthoritySpec) -> LoadedAuthority:
     path = Path(spec.path)
     actual_hash = sha256_file(path)
@@ -72,11 +101,8 @@ def load_authority(spec: AuthoritySpec) -> LoadedAuthority:
     rows = _read_rows(path)
     if spec.expected_rows is not None and len(rows) != spec.expected_rows:
         raise ValueError(f"Row-count mismatch: expected {spec.expected_rows}, got {len(rows)}")
-    required = AUTHORITY_SCHEMAS[spec.authority_type]
     for index, row in enumerate(rows, start=1):
-        missing = sorted(key for key in required if row.get(key) in (None, ""))
-        if missing:
-            raise ValueError(f"Row {index} missing required fields: {', '.join(missing)}")
+        _validate_row(spec.authority_type, row, index)
     audit = {
         "path": str(path),
         "sha256": actual_hash,
@@ -84,6 +110,9 @@ def load_authority(spec: AuthoritySpec) -> LoadedAuthority:
         "schema": spec.authority_type,
         "source": spec.source,
         "provenance": spec.provenance or {},
+        "normalization_report": {
+            "rows_read": len(rows),
+            "transformations": "none; authority values are validated but preserved verbatim",
+        },
     }
     return LoadedAuthority(spec.authority_type, spec.source, actual_hash, tuple(rows), audit)
-
