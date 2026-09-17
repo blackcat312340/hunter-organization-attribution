@@ -15,9 +15,13 @@ The integration contract was derived from the production reader already used by 
 The ASN context interface was reviewed from:
 
 - script: `scripts/build_measurement_212_asn_v2_lookup.py`
-- blob: `49ae1e784de77a515d0fe75c950e1fe560a78f4b`
+- script blob: `49ae1e784de77a515d0fe75c950e1fe560a78f4b`
+- frozen lookup: `artifacts/measurement_212_asn_v2_lookup.csv`
+- frozen lookup SHA-256: `1709d5be6478bf5add9566b5b1d843aa1eb5a79d4e9962fd07fc19d093105390`
 
-These identifiers are frozen in `production_adapter.py`. A future production-source change must be reviewed before the corresponding contract constants are advanced.
+The lookup summary records 11,488 ASN rows and confirms that it is an aggregate-only `ASN -> category/provider` replay product. These identifiers are frozen in `production_adapter.py`. A future production-source or lookup change must be reviewed before the corresponding contract constants are advanced.
+
+The existing 796-IP institutional export at the same source commit is supporting compatibility evidence, not an input to this repository. Its master table uses numeric `primary_asn` together with `primary_infrastructure_category` and `primary_provider_family`; the reviewed example rows have no ASN organization text. This is consistent with the narrower lookup contract below and does not justify synthesizing `asn_organization`.
 
 ## Raw Hunter projection
 
@@ -67,7 +71,7 @@ For an audit-only smoke check, `strict_contract=False` may be used. Unknown fiel
 
 ## ASN enrichment boundary
 
-The reviewed frozen Measurement 212 ASN lookup contains:
+The reviewed frozen Measurement 212 ASN lookup contains exactly:
 
 - `asn`
 - `asn_category`
