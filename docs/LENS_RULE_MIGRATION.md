@@ -1,111 +1,134 @@
 # LENS-20260602 Rule Migration
 
-This document records the Phase 1 migration inventory from `LENS-20260602` into the Hunter organization-attribution method. LENS/FOFA is a methodology and rule source only; it is never a runtime dependency and its output labels are never imported as attribution truth.
+This document records the source-verified Phase 1 migration from `LENS-20260602` into the Hunter organization-attribution method. LENS/FOFA is a methodology and rule source only; it is never a runtime dependency and its output labels are never imported as attribution truth.
 
-## Source archive provenance
+## Verified source provenance
 
 - archive: `LENS-20260602.zip`
-- recorded SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
-- reviewed implementation recorded by the initial freeze: `utils/cn_org_ip_stats.py`
-- migration review date: `2026-09-17`
+- independently verified archive SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
+- embedded repository remote: `https://github.com/Cristliu/LENS`
+- embedded repository `main` commit: `19a155697284c58d895b47a1506472a23b338594`
+- reviewed source path: `utils/cn_org_ip_stats.py`
+- reviewed source-file SHA-256: `b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29`
+- source-level review date: `2026-09-17`
 - runtime dependency: **none**
 - archive committed to this repository: **no** (`*.zip` is ignored)
 
-The digest above is inherited from the initial Phase 1 freeze commit. This review did not have the archive bytes available to re-hash independently. The currently accessible preserved task notes also state that LENS contains an `SOE` category family, but they do not contain the source expression needed to migrate it faithfully. Therefore this document must not claim complete source-level parity with LENS until the archive is re-materialized and verified.
+The archive hash now matches the digest recorded by the initial repository freeze. The previous source-completeness blocker is closed.
 
-A future archive re-materialization must first verify the recorded digest, then compare the original classifier implementation rule by rule against this inventory. No missing rule may be reconstructed from memory or a category name alone.
+## What the source actually contains
+
+The general classifier is `classify_org(org, domain)`. It evaluates, in order:
+
+1. `EDU_RESEARCH_PAT` -> `education_research`
+2. `GOV_PAT` -> `government`
+3. `FINANCE_PAT` -> `finance`
+4. `HEALTH_PAT` -> `healthcare`
+5. `SOE_PAT` -> `state_owned_enterprise`
+6. `CLOUD_PAT` -> `cloud_vendor`
+7. `ISP_PAT` on `org` only -> `isp_carrier`
+8. otherwise `other`
+
+The source also has a distinct `detect_sensitive` classifier with ten `SENSITIVE_RULES`, plus `CLOUD_ISP_SKIP` and `STRONG_GOV_SIGNAL` guards. That subsystem is not equivalent to general organization category classification.
 
 ## Migration principle
 
-The migration copies rule semantics, not FOFA observations or LENS output labels. Rules are normalized into field-local deterministic matches with explicit provenance. A rule executes only when its source field has an approved `NormalizedHunterRecord` counterpart.
+The migration copies rule semantics and provenance, not FOFA observations or LENS output labels. Rules execute only on approved `NormalizedHunterRecord` fields.
 
-Organization identity and organization category remain separate. Category regexes such as `university`, `college`, `大学`, or `科学院` may establish `education_research`, but they cannot invent a named institution. Infrastructure patterns such as cloud/ISP/CERNET remain network or hosting context unless a separate identity authority names an organization.
+The source classifier concatenates `org + domain`. The Hunter method deliberately splits that combined string into field-local rules so every hit records which Hunter field produced it. This preserves the source regex while improving provenance.
+
+LENS uses first-match precedence. The Hunter attribution method deliberately does **not** inherit this precedence because its resolution contract requires all matching evidence to remain visible. Therefore source expressions are preserved, while final multi-category semantics are evidence-preserving rather than winner-takes-first.
+
+Organization identity and organization category remain separate. Infrastructure patterns also remain orthogonal to hosted organization identity.
 
 ## Field mapping
 
 | LENS/FOFA field | Hunter field | status | runtime semantics |
 |---|---|---|---|
 | `org` | `asn_organization` | supported with semantic narrowing | ASN/network registration context; not automatic hosted-organization identity |
-| `domain` | `domain` / reviewed `root_domain` | supported | field-local domain evidence |
-| `hosts` | `host` | supported | one normalized host value per Hunter observation |
-| `titles` | `web_title` | supported | one reviewed web-title value per Hunter observation |
-| `body` | none | unsupported | no approved Hunter equivalent |
-| `server` | none | unsupported | no approved Hunter equivalent |
-| `app` | none | unsupported | no approved Hunter equivalent |
+| `domain` | `domain` | supported | normalized field-local domain evidence |
+| `hosts` | `host` | supported with cardinality narrowing | LENS aggregates hosts; one Hunter record carries one host observation |
+| `titles` | `web_title` | supported with cardinality narrowing | LENS aggregates titles; one Hunter record carries one title observation |
+| `country` | `hunter_reported_country` | supported | observation context; not used by the general category classifier |
+| `platform` | none | deliberately not migrated | service/discovery label, not organization-attribution truth |
+| `body` | none | unsupported | no approved Hunter attribution field |
+| `server` | none | unsupported | no approved Hunter attribution field |
+| `app` | none | unsupported | FOFA discovery fingerprint/query field, no approved Hunter attribution field |
 
-Unsupported fields must never be synthesized from other Hunter values.
+Unsupported fields are never synthesized from other Hunter values.
 
-## Current repository rule inventory
+## Executable rule inventory
 
-The repository currently contains **15 LENS-derived inventory entries**:
+The repository contains **16 executable rules** across the default rule catalog:
 
-- **12 executable rules**
-- **3 documentation-only unsupported-field rules**
-
-Executable rules by repository file:
-
-| file | executable rules | purpose |
+| file | rules | status |
 |---|---:|---|
-| `rules/categories.yaml` | 7 | education/research, government, finance, healthcare category signals |
-| `rules/organization_patterns.yaml` | 4 | AWS, CERNET, broad cloud/CDN, and ISP/carrier infrastructure context |
-| `rules/domain_patterns.yaml` | 1 | root-domain education/research category signal |
-| **total** | **12** | |
+| `rules/categories.yaml` | 10 | exact source regexes from EDU/GOV/FINANCE/HEALTH/SOE, split across `asn_organization` and `domain` |
+| `rules/organization_patterns.yaml` | 5 | exact CLOUD/ISP source signals plus named AWS/CERNET method refinements |
+| `rules/domain_patterns.yaml` | 1 | explicit root-domain adaptation of the source `.edu.` signal |
+| **total** | **16** | |
 
-Unsupported inventory entries in `rules/categories.yaml`:
+Of these, **13** use `source: LENS-20260602` and preserve an exact source regex. **3** are explicitly marked `source: method-adaptation`:
 
-1. `lens.unsupported.fofa.body.education`
-2. `lens.unsupported.fofa.server`
-3. `lens.unsupported.fofa.app`
+- named AWS infrastructure refinement;
+- named CERNET network-context refinement;
+- normalized root-domain `.edu` refinement.
 
-All executable migrated rules carry `source: LENS-20260602` and retain a rule-specific note describing the adaptation.
+Each LENS-derived executable rule records the source path, source symbol, source-file SHA-256, archive SHA-256, and adaptation note.
 
-## Known source-verification gap
+## Source symbols accounted for
 
-The preserved Phase 1 task context states that the LENS classifier also contains an **SOE** category family. The exact original field combination, expression, and exclusions are not present in the accessible material. Because the archive bytes are unavailable in this review session, no executable SOE rule is added here.
+The executable catalog accounts for every general-classifier regex symbol:
 
-Status:
+- `EDU_RESEARCH_PAT`
+- `GOV_PAT`
+- `FINANCE_PAT`
+- `HEALTH_PAT`
+- `SOE_PAT`
+- `CLOUD_PAT`
+- `ISP_PAT`
 
-- known LENS family: `SOE`
-- current repository migration: **not yet source-verified**
-- executable rule fabricated from summary text: **no**
-- required action before claiming complete LENS migration: verify `LENS-20260602.zip` SHA-256 and inspect the original classifier implementation
+`SOE_PAT` is now source-verified as:
 
-This is a provenance/completeness gate, not a reason to import LENS output labels directly.
+`state grid|国家电网|petrochina|中石油|sinopec|中石化`
 
-## Migrated semantic families
+and is executable on both `asn_organization` and `domain`, matching the source classifier's combined `org + domain` semantics.
 
-The currently verified executable migration covers:
+## Infrastructure retyping
 
-- education/research terms derived from the recorded LENS education/research classifier, including CERNET, education-and-research wording, `.edu`/academic-domain signals, university/college, academy-of-sciences, CNIC-CAS, and Chinese equivalents;
-- government domain-category signals;
-- finance organization-text signals;
-- healthcare title signals;
-- cloud/CDN and ISP/carrier patterns moved to **infrastructure context**, not organization identity;
-- named AWS and CERNET infrastructure/network context for the required orthogonality tests.
+The source returns `cloud_vendor` and `isp_carrier` as categories from `classify_org`. In this method they are intentionally retyped to target `infrastructure`, because cloud/ISP evidence describes hosting/routing context rather than the hosted organization's identity.
 
-The initial freeze records LENS identifiers/ideas such as `EDU_RESEARCH_PAT`, government/finance/health patterns, and cloud/ISP skip logic. This repository does not depend on those Python symbols at runtime; their normalized counterparts are the versioned YAML rules.
+Generic cloud/ISP source rules do not fabricate an infrastructure organization name. Named AWS and CERNET rules are separately marked method adaptations. Infrastructure rule categories are emitted through `infrastructure_categories`, never through organization `categories`.
+
+## Sensitive-rule preservation
+
+`rules/sensitive_reference.yaml` preserves verbatim:
+
+- all 10 `SENSITIVE_RULES` regexes;
+- `CLOUD_ISP_SKIP`;
+- `STRONG_GOV_SIGNAL`;
+- source archive/file hashes and embedded repository commit.
+
+These entries are `executable: false` in Phase 1. The reason is semantic, not missing data: `detect_sensitive` answers a separate sensitive-asset question and applies a cross-field cloud/ISP suppression guard. Executing each sensitive regex independently as an organization category would change the source meaning.
 
 ## Deliberate non-migrations
 
 Phase 1 does not migrate:
 
-- FOFA discovery or query execution;
-- LENS `platform` or service labels;
-- LENS per-IP category results;
-- any label produced only because an IP appeared in a LENS output table;
-- any rule requiring `body`, `server`, or `app` until Hunter supplies a reviewed semantically equivalent field.
+- FOFA discovery/query execution;
+- LENS platform/service labels;
+- LENS per-IP classification outputs;
+- labels produced only because an IP appeared in a LENS output table;
+- FOFA `body`, `server`, or `app` into invented Hunter fields;
+- the `detect_sensitive` final label into general organization attribution.
 
-These deliberate non-migrations are distinct from the unresolved SOE source-verification gap above.
+## Review gate for future changes
 
-## Review gate before modifying this inventory
+Any future migration change must record:
 
-Any future change must record:
-
-1. the source archive/version and SHA-256;
-2. the original rule or rule family being adapted;
-3. the Hunter field semantics used by the new rule;
-4. whether the rule targets identity, category, or infrastructure;
-5. supported/unsupported runtime status;
-6. synthetic tests demonstrating false-positive controls and organization/infrastructure separation.
-
-Phase 1 may freeze the method implementation independently, but it must not label the LENS migration as source-complete until the archive gate is closed.
+1. source archive/version and SHA-256;
+2. source file/path/symbol and file SHA-256;
+3. the Hunter field semantics used by the adaptation;
+4. whether the rule targets identity, organization category, or infrastructure;
+5. whether source precedence/guards are preserved, deliberately transformed, or not executable;
+6. synthetic tests for false-positive controls and organization/infrastructure separation.
