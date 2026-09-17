@@ -1,0 +1,31 @@
+name: phase1-tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Enforce repository data hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked="$(git ls-files)"
+          if printf '%s\n' "$tracked" | grep -E '\.(csv|tsv|zip|jsonl|parquet|xlsx)$' ; then
+            echo 'Forbidden real-data/archive extension is tracked.' >&2
+            exit 1
+          fi
+          if printf '%s\n' "$tracked" | grep -E '^(data|raw|outputs|artifacts|private)/' ; then
+            echo 'Forbidden data directory is tracked.' >&2
+            exit 1
+          fi
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Test
+        run: pytest -q
