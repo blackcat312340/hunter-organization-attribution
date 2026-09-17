@@ -34,14 +34,20 @@ MEASUREMENT212_ATTRIBUTION_FIELDS = frozenset(
     }
 )
 
-# Production fields verified in the same reader but deliberately excluded from
-# organization attribution. They belong to service/fingerprint/transport logic.
+# Reviewed fields that may legitimately be present on stored Hunter-derived
+# Measurement 212 rows but must never become organization-attribution evidence.
+# The first group is used by current Measurement 212 service/fingerprint logic;
+# the second group is preserved by the reviewed upstream fixed output schema.
 MEASUREMENT212_KNOWN_NONATTRIBUTION_FIELDS = frozenset(
     {
         "full_name",
         "http_head",
         "protocol_type",
         "favicon",
+        "is_web",
+        "city",
+        "updated_at",
+        "banner_info",
     }
 )
 
@@ -98,8 +104,12 @@ def project_measurement212_hunter_record(
     """Project one production Measurement 212 Hunter row into the frozen method input.
 
     The function is deliberately a projection, not a permissive alias layer. Known
-    service-identification fields are explicitly ignored and never become attribution
+    non-attribution fields are explicitly ignored and never become attribution
     evidence. Unknown production fields fail closed when ``strict_contract=True``.
+
+    ``updated_at`` is intentionally ignored rather than mapped to ``observed_at``:
+    the former is upstream asset metadata, while the latter is explicit provenance
+    supplied by the caller for the observation/snapshot represented by this record.
     """
 
     known = MEASUREMENT212_ATTRIBUTION_FIELDS | MEASUREMENT212_KNOWN_NONATTRIBUTION_FIELDS
