@@ -21,6 +21,16 @@ def normalize_ip(value: object) -> str:
     return str(address)
 
 
+def normalize_port(value: object) -> int | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise ValueError("port must be between 1 and 65535")
+    return port
+
+
 def normalize_domain(value: object) -> str | None:
     text = clean_text(value)
     if not text:
@@ -55,4 +65,3 @@ def derive_root_domain(domain: str | None) -> str | None:
     if len(labels[-2]) <= 3 and labels[-2] in common_second_level:
         return ".".join(labels[-3:])
     return ".".join(labels[-2:])
-
