@@ -70,7 +70,7 @@ def test_generic_aws_plus_university_domain(engine):
     assert "Amazon Web Services" not in result.resolution.conflicting_organizations
 
 
-def test_infrastructure_only_signal_is_not_organization_category():
+def test_infrastructure_only_signal_is_not_organization_category(engine):
     result = attr(engine, asn_organization="Amazon.com, Inc.")
     assert result.resolution.status == "unresolved"
     assert result.resolution.categories == ()
