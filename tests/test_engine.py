@@ -1,5 +1,6 @@
-from hunter_org_attribution import normalize_hunter_record
+from hunter_org_attribution import AttributionEngine, normalize_hunter_record
 from hunter_org_attribution.export import to_json
+from hunter_org_attribution.provenance import LoadedAuthority
 
 
 def attr(engine, **values):
@@ -18,6 +19,30 @@ def test_domain_organization_match(engine):
     assert any(e.rule_type == "official_domain" for e in result.evidence)
 
 
+def test_specific_official_subdomain_is_not_lost_when_root_domain_differs():
+    authority = LoadedAuthority(
+        authority_type="domains",
+        source="synthetic-specific-domain",
+        sha256="1" * 64,
+        rows=({
+            "rule_id": "test.domain.lab",
+            "domain": "lab.example.edu",
+            "organization": "Example Research Lab",
+        },),
+        audit={"schema": "domains", "source": "synthetic-specific-domain"},
+    )
+    local_engine = AttributionEngine(authorities=(authority,))
+    result = local_engine.attribute(normalize_hunter_record({
+        "ip": "203.0.113.10",
+        "domain": "service.lab.example.edu",
+        "root_domain": "example.edu",
+    }))
+    assert result.resolution.organization == "Example Research Lab"
+    evidence = next(e for e in result.evidence if e.rule_id == "test.domain.lab")
+    assert evidence.matched_field == "domain"
+    assert evidence.pattern == "lab.example.edu"
+
+
 def test_asn_organization_match(engine):
     result = attr(engine, asn=64510, asn_organization="Example University")
     assert result.resolution.organization == "Example University"
@@ -25,7 +50,7 @@ def test_asn_organization_match(engine):
 
 
 def test_education_research_regex_classification(engine):
-    result = attr(engine, web_title="National Academy of Sciences Research Portal")
+    result = attr(engine, asn_organization="Example University Research Network")
     assert result.resolution.status == "category_only"
     assert result.resolution.organization is None
     assert "education_research" in result.resolution.categories
@@ -40,7 +65,17 @@ def test_generic_aws_plus_university_domain(engine):
     )
     assert result.resolution.organization == "Example University"
     assert "Amazon Web Services" in result.resolution.infrastructure_organizations
+    assert "cloud_vendor" in result.resolution.infrastructure_categories
+    assert "cloud_vendor" not in result.resolution.categories
     assert "Amazon Web Services" not in result.resolution.conflicting_organizations
+
+
+def test_infrastructure_only_signal_is_not_organization_category(engine):
+    result = attr(engine, asn_organization="Amazon.com, Inc.")
+    assert result.resolution.status == "unresolved"
+    assert result.resolution.categories == ()
+    assert "cloud_vendor" in result.resolution.infrastructure_categories
+    assert "Amazon Web Services" in result.resolution.infrastructure_organizations
 
 
 def test_institution_range_plus_education_network_asn(engine):
@@ -52,6 +87,7 @@ def test_institution_range_plus_education_network_asn(engine):
     )
     assert result.resolution.organization == "Example University"
     assert "CERNET" in result.resolution.infrastructure_organizations
+    assert "education_research_network" in result.resolution.infrastructure_categories
 
 
 def test_category_only_does_not_invent_identity(engine):
@@ -60,12 +96,49 @@ def test_category_only_does_not_invent_identity(engine):
     assert result.resolution.organization is None
 
 
+def test_multiple_nonidentity_matches_do_not_claim_multi_rule_identity_agreement(engine):
+    result = attr(engine, asn_organization="Amazon.com University Research Network")
+    assert result.resolution.status == "category_only"
+    assert len(result.evidence) >= 2
+    assert result.resolution.agreement_status == "not_applicable"
+    assert "multi_rule" not in result.resolution.association_types
+
+
 def test_conflicting_organization_rules_are_explicit(engine):
     result = attr(engine, ip="198.51.100.5", domain="service.other.edu")
     assert result.resolution.status == "conflict"
     assert result.resolution.organization is None
     assert result.resolution.conflicting_organizations == ("Conflicting Institute", "Other University")
     assert len(result.evidence) >= 2
+    assert "multi_rule" not in result.resolution.association_types
+
+
+def test_overlapping_ranges_preserve_all_conflicting_identity_evidence():
+    authority = LoadedAuthority(
+        authority_type="ipv4_ranges",
+        source="synthetic-overlap",
+        sha256="2" * 64,
+        rows=(
+            {
+                "rule_id": "test.range.a",
+                "start_ip": "192.0.2.0",
+                "end_ip": "192.0.2.100",
+                "organization": "Organization A",
+            },
+            {
+                "rule_id": "test.range.b",
+                "start_ip": "192.0.2.50",
+                "end_ip": "192.0.2.150",
+                "organization": "Organization B",
+            },
+        ),
+        audit={"schema": "ipv4_ranges", "source": "synthetic-overlap"},
+    )
+    local_engine = AttributionEngine(authorities=(authority,))
+    result = local_engine.attribute(normalize_hunter_record({"ip": "192.0.2.75"}))
+    assert result.resolution.status == "conflict"
+    assert result.resolution.conflicting_organizations == ("Organization A", "Organization B")
+    assert {e.rule_id for e in result.evidence} == {"test.range.a", "test.range.b"}
 
 
 def test_multi_rule_agreement_preserves_all_matches(engine):
@@ -96,6 +169,16 @@ def test_evidence_preserves_mandatory_fields(engine):
     assert evidence.authority
     assert evidence.resolved_organization == "Example University"
     assert evidence.resolved_category == "education_research"
+
+
+def test_lens_rule_evidence_preserves_source_file_provenance(engine):
+    result = attr(engine, asn_organization="State Grid Corporation")
+    evidence = next(e for e in result.evidence if e.rule_id == "lens.category.state_owned_enterprise.asn_org")
+    assert evidence.resolved_category == "state_owned_enterprise"
+    assert evidence.provenance["source_symbol"] == "SOE_PAT"
+    assert evidence.provenance["source_path"] == "utils/cn_org_ip_stats.py"
+    assert evidence.provenance["source_sha256"] == "b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29"
+    assert evidence.provenance["archive_sha256"] == "0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c"
 
 
 def test_deterministic_outputs(engine):

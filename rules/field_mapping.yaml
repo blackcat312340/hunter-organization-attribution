@@ -1,31 +1,38 @@
-schema_version: 1
+schema_version: 2
 mappings:
   - lens_field: org
     hunter_field: asn_organization
     status: supported_with_semantic_narrowing
-    notes: Hunter ASN organization is network registration context; never automatically treated as hosted organization.
+    notes: LENS org is FOFA organization text; Hunter ASN organization is only network-registration context and is never automatic hosted-organization identity.
   - lens_field: domain
     hunter_field: domain
     status: supported
-    notes: Normalized lower-case hostname/domain.
+    notes: Normalized lower-case Hunter domain/hostname; source classify_org combines org and domain, while the migrated engine keeps field provenance separate.
   - lens_field: hosts
     hunter_field: host
-    status: supported
-    notes: Each Hunter observation has one normalized host string.
+    status: supported_with_cardinality_narrowing
+    notes: LENS aggregates multiple hosts per IP; one NormalizedHunterRecord carries one Hunter host observation.
   - lens_field: titles
     hunter_field: web_title
+    status: supported_with_cardinality_narrowing
+    notes: LENS aggregates multiple titles per IP; one NormalizedHunterRecord carries one reviewed Hunter web title.
+  - lens_field: country
+    hunter_field: hunter_reported_country
     status: supported
-    notes: Each Hunter observation has one reviewed web title.
+    notes: Preserved as observation context; it is not used by the Phase 1 organization-category classifier.
+  - lens_field: platform
+    hunter_field: null
+    status: deliberately_not_migrated
+    notes: LENS platform/service labels are discovery outputs and cannot become organization-attribution truth.
   - lens_field: body
     hunter_field: null
     status: unsupported
-    notes: No approved NormalizedHunterRecord equivalent.
+    notes: FOFA discovery queries may use body, but no approved NormalizedHunterRecord equivalent exists.
   - lens_field: server
     hunter_field: null
     status: unsupported
-    notes: No approved NormalizedHunterRecord equivalent.
+    notes: LENS FOFA discovery fetches server, but Phase 1 has no approved Hunter-equivalent runtime field.
   - lens_field: app
     hunter_field: null
     status: unsupported
-    notes: No approved NormalizedHunterRecord equivalent.
-
+    notes: FOFA app is used as a discovery fingerprint/query term and has no approved Hunter-equivalent attribution field.

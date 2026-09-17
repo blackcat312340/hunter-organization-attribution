@@ -1,0 +1,96 @@
+schema_version: 1
+source:
+  archive: LENS-20260602.zip
+  archive_sha256: 0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c
+  repository: https://github.com/Cristliu/LENS
+  repository_commit: 19a155697284c58d895b47a1506472a23b338594
+  path: utils/cn_org_ip_stats.py
+  file_sha256: b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29
+runtime_status: reference_only
+reason: >-
+  LENS detect_sensitive is a separate sensitive-asset classifier, not the general
+  organization-category classifier. Its semantics combine org/domain/hosts/titles
+  and then apply CLOUD_ISP_SKIP and STRONG_GOV_SIGNAL as a cross-field guard.
+  Phase 1 preserves these rules verbatim for provenance but does not silently
+  reinterpret them as independent organization-attribution category rules.
+rules:
+  - reference_id: lens.sensitive.us_executive
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: us_executive
+    display_name: 美国行政机构（白宫等）
+    pattern: 'white\s*house|whitehouse\.gov|executive office of the president'
+    executable: false
+  - reference_id: lens.sensitive.defense_military
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: defense_military
+    display_name: 国防/军事
+    pattern: 'department of defense|\bdod\b|defense\.gov|pentagon|armed forces|joint chiefs|national guard|bundeswehr|ministry of defence|ministry of defense|国防部|中央军委|军事科学院|军事|national defense|army\.mil|navy\.mil|af\.mil|marines\.mil|lockheed martin|raytheon|northrop grumman|bae systems'
+    executable: false
+  - reference_id: lens.sensitive.intelligence
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: intelligence
+    display_name: 情报/安全机构
+    pattern: '\bnsa\b|\bcia\b|\bfbi\b|\bdhs\b|homeland security|secret service|gchq|\bmi5\b|\bmi6\b|direction générale|dgse|bnd\b|情报局|国家安全部|国安部|national security agency'
+    executable: false
+  - reference_id: lens.sensitive.government
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: government
+    display_name: 政府机构
+    pattern: '\.gov\.|\.gov\b|\.mil\b|department of state|state department|state\.gov|ministry of|government of|gov\.uk|gouv\.fr|parliament|congress\.gov|senate\.gov|house\.gov|国务院|人民政府|政务|公安部|工信部|科技部|europa\.eu|european commission|administrative office|federal agency'
+    executable: false
+  - reference_id: lens.sensitive.embassy_diplomatic
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: embassy_diplomatic
+    display_name: 外交/使馆
+    pattern: 'embassy|consulate|diplomatic|外交|大使馆|领事馆'
+    executable: false
+  - reference_id: lens.sensitive.central_bank_finance
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: central_bank_finance
+    display_name: 央行/金融监管
+    pattern: 'federal reserve|central bank|人民银行|pboc|securities and exchange|sec\.gov|financial conduct authority|ecb\.|european central bank'
+    executable: false
+  - reference_id: lens.sensitive.law_enforcement
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: law_enforcement
+    display_name: 执法/边境
+    pattern: 'border protection|customs and border|\bcbp\b|immigration|ice\.gov|law enforcement|police department|公安|警务'
+    executable: false
+  - reference_id: lens.sensitive.nato_alliance
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: nato_alliance
+    display_name: 北约/军事同盟
+    pattern: '\bnato\b|north atlantic treaty|北大西洋公约'
+    executable: false
+  - reference_id: lens.sensitive.state_owned_critical
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: state_owned_critical
+    display_name: 国有关键基础设施
+    pattern: 'state grid|国家电网|petrochina|中石油|sinopec|中石化|china national nuclear|中核|航天科技|航天科工|csg\.|power grid|nuclear regulatory'
+    executable: false
+  - reference_id: lens.sensitive.education_research_sensitive
+    kind: sensitive_rule
+    source_symbol: SENSITIVE_RULES
+    label: education_research_sensitive
+    display_name: 教育/科研网络（含CERNET等）
+    pattern: 'cernet|education and research network|chinese academy of sciences|cnic-cas|中科院|national laboratory|national lab\b'
+    executable: false
+  - reference_id: lens.sensitive.guard.cloud_isp_skip
+    kind: guard
+    source_symbol: CLOUD_ISP_SKIP
+    pattern: 'amazon|alibaba|tencent|google|microsoft|cloudflare|hetzner|digitalocean|chinanet|china telecom|china unicom|china mobile|ovh|oracle corporation'
+    executable: false
+  - reference_id: lens.sensitive.guard.strong_gov_signal
+    kind: guard
+    source_symbol: STRONG_GOV_SIGNAL
+    pattern: '\.gov|\.mil|whitehouse|pentagon|defense\.gov|state\.gov|国务院|国防部|白宫'
+    executable: false

@@ -4,6 +4,9 @@ import ipaddress
 from urllib.parse import urlsplit
 
 
+MAX_ASN = 4_294_967_295
+
+
 def clean_text(value: object) -> str | None:
     if value is None:
         return None
@@ -19,6 +22,16 @@ def normalize_ip(value: object) -> str:
     if address.version != 4:
         raise ValueError("Phase 1 supports IPv4 only")
     return str(address)
+
+
+def normalize_port(value: object) -> int | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise ValueError("port must be between 1 and 65535")
+    return port
 
 
 def normalize_domain(value: object) -> str | None:
@@ -39,8 +52,8 @@ def normalize_asn(value: object) -> int | None:
     if text.upper().startswith("AS"):
         text = text[2:]
     asn = int(text)
-    if asn <= 0:
-        raise ValueError("ASN must be positive")
+    if not 1 <= asn <= MAX_ASN:
+        raise ValueError(f"ASN must be between 1 and {MAX_ASN}")
     return asn
 
 
@@ -55,4 +68,3 @@ def derive_root_domain(domain: str | None) -> str | None:
     if len(labels[-2]) <= 3 and labels[-2] in common_second_level:
         return ".".join(labels[-3:])
     return ".".join(labels[-2:])
-
