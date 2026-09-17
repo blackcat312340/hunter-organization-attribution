@@ -113,11 +113,25 @@ Organization categories and infrastructure categories are also separate output n
 
 Conflicting identity evidence is never silently overwritten. If two identity-bearing rules resolve different organizations, the output sets `status = conflict`, `ambiguity_status = ambiguous_conflict`, `agreement_status = conflict`, `organization_name = null`, and preserves an explicit conflict set. All underlying evidence remains present.
 
+### 10.1 Identity reconciliation
+
+Identity-bearing evidence is reconciled into identities by explicit rules rather than by naive `(organization_id, organization_name)` tuple equality. `organization_id` is nullable, and a missing identifier must not by itself turn an agreeing name pair into a conflict.
+
+Let *canonical name* mean the organization name with collapsed whitespace and case folding. It is a normal form, not a similarity metric — no fuzzy string matching is used anywhere in reconciliation.
+
+1. **Same non-null `organization_id`** → same identity, even when the display names differ. Differing names are a display-name discrepancy: each name stays visible on its own evidence row and the cluster keeps one deterministic primary name.
+2. **One non-null `organization_id`, the other null, canonical names equal** → same identity.
+3. **Both `organization_id` values null, canonical names equal** → same identity.
+4. **Two different non-null `organization_id` values** → identity conflict, even when the names are identical. Two distinct explicit identifiers are never merged by name.
+5. **One `organization_id` present and the other null, with differing canonical names** → distinct identities, reported as a conflict.
+
+If more than one identity remains after reconciliation, the result is `conflict`; if exactly one remains, the result is `resolved`.
+
 ## 11. Deterministic resolution
 
-Resolution does not calculate an opaque confidence score. Identity-bearing evidence is grouped by resolved organization identifier/name. If exactly one identity remains, the result is resolved; if multiple identities remain, the result is conflict. Organization-category-only evidence yields `category_only`; infrastructure-only evidence yields `unresolved` with infrastructure context; no identity/category evidence also yields `unresolved`.
+Resolution does not calculate an opaque confidence score. Identity-bearing evidence is reconciled into identities by the rules in section 10.1. If exactly one identity remains, the result is resolved; if multiple identities remain, the result is conflict. Organization-category-only evidence yields `category_only`; infrastructure-only evidence yields `unresolved` with infrastructure context; no identity/category evidence also yields `unresolved`.
 
-`multi_rule` is emitted only when multiple identity-bearing hits agree on one organization. Multiple category or infrastructure hits alone do not create identity agreement.
+`multi_rule` is emitted only when multiple identity-bearing hits reconcile to **one** identity. Multiple category or infrastructure hits alone do not create identity agreement, and a category or infrastructure hit never counts toward identity agreement even when an identity hit is also present.
 
 The conceptual specificity order is direct range, exact IP, official domain, then organization-role ASN. It is used for deterministic presentation and review, not for deleting contrary evidence.
 

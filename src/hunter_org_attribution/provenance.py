@@ -4,6 +4,7 @@ import csv
 import hashlib
 import ipaddress
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,13 @@ AUTHORITY_SCHEMAS = {
     "domains": {"domain", "organization"},
     "asn": {"asn", "organization", "role"},
 }
+
+
+class AuthoritySourceError(ValueError):
+    """Raised when an external authority source cannot be projected safely.
+
+    Subclasses ``ValueError`` so existing fail-closed callers keep working.
+    """
 
 
 @dataclass(frozen=True)
@@ -101,20 +109,51 @@ def load_authority(spec: AuthoritySpec) -> LoadedAuthority:
     if spec.authority_type not in AUTHORITY_SCHEMAS:
         raise ValueError(f"Unknown authority type: {spec.authority_type}")
     rows = _read_rows(path)
-    if spec.expected_rows is not None and len(rows) != spec.expected_rows:
-        raise ValueError(f"Row-count mismatch: expected {spec.expected_rows}, got {len(rows)}")
-    for index, row in enumerate(rows, start=1):
-        _validate_row(spec.authority_type, row, index)
+    return load_authority_rows(
+        rows,
+        authority_type=spec.authority_type,
+        source=spec.source,
+        sha256=actual_hash,
+        path=str(path),
+        expected_rows=spec.expected_rows,
+        provenance=spec.provenance,
+    )
+
+
+def load_authority_rows(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    authority_type: str,
+    source: str,
+    sha256: str,
+    path: str | None = None,
+    expected_rows: int | None = None,
+    provenance: dict[str, Any] | None = None,
+) -> LoadedAuthority:
+    """Validate canonical authority records and build a ``LoadedAuthority``.
+
+    This is the single validation entry point shared by the file loader and by
+    source-specific adapters. Adapters are responsible only for projecting an
+    external source schema into the canonical column names; all structural
+    validation still happens here.
+    """
+    if authority_type not in AUTHORITY_SCHEMAS:
+        raise ValueError(f"Unknown authority type: {authority_type}")
+    materialized = [dict(row) for row in rows]
+    if expected_rows is not None and len(materialized) != expected_rows:
+        raise ValueError(f"Row-count mismatch: expected {expected_rows}, got {len(materialized)}")
+    for index, row in enumerate(materialized, start=1):
+        _validate_row(authority_type, row, index)
     audit = {
-        "path": str(path),
-        "sha256": actual_hash,
-        "row_count": len(rows),
-        "schema": spec.authority_type,
-        "source": spec.source,
-        "provenance": spec.provenance or {},
+        "path": path,
+        "sha256": sha256,
+        "row_count": len(materialized),
+        "schema": authority_type,
+        "source": source,
+        "provenance": provenance or {},
         "normalization_report": {
-            "rows_read": len(rows),
+            "rows_read": len(materialized),
             "transformations": "none; authority values are validated but preserved verbatim",
         },
     }
-    return LoadedAuthority(spec.authority_type, spec.source, actual_hash, tuple(rows), audit)
+    return LoadedAuthority(authority_type, source, sha256, tuple(materialized), audit)

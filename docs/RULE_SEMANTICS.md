@@ -73,7 +73,9 @@ Every hit emits the full evidence contract:
 
 No rule is discarded merely because another rule is more specific. Conflicting identity evidence is surfaced by resolution rather than overwritten.
 
-`multi_rule` is added only for multiple agreeing identity-bearing hits, never merely because several category or infrastructure rules matched.
+Identity-bearing hits are reconciled by the explicit rules in `docs/METHOD.md` section 10.1. Tuple equality on `(organization_id, organization_name)` is not used: a missing identifier does not turn an agreeing name pair into a conflict, and two distinct non-null identifiers are never merged because their names match. Reconciliation uses a canonical name form only (whitespace-collapsed, case-folded); no fuzzy name matching is performed.
+
+`multi_rule` is added only for multiple identity-bearing hits that reconcile to one identity, never merely because several category or infrastructure rules matched.
 
 ## Determinism
 

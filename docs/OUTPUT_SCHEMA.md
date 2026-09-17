@@ -51,7 +51,7 @@ For LENS-derived rules, `provenance` includes source-file/symbol and archive/fil
 - `evidence[]`: complete, deterministically sorted evidence rows
 - `resolution`:
   - `organization_id`: agreed organization identifier or null
-  - `organization_name`: agreed organization name or null
+  - `organization_name`: agreed organization display name or null
   - `categories[]`: organization categories only; infrastructure rule categories are excluded
   - `association_types[]`: all evidence families plus `multi_rule` only for multiple agreeing identity hits
   - `infrastructure_organizations[]`: named network/hosting organizations retained separately from identity
@@ -64,5 +64,7 @@ For LENS-derived rules, `provenance` includes source-file/symbol and archive/fil
   - `conflicting_organizations[]`: explicit sorted conflict set
 
 Infrastructure-only evidence does not produce `category_only`; it produces `unresolved` plus explicit infrastructure context.
+
+`organization_id` and `organization_name` describe the single reconciled identity. Reconciliation follows `docs/METHOD.md` section 10.1: evidence agreeing on a non-null identifier, or on a canonical name where at most one side carries an identifier, forms one identity; two distinct non-null identifiers always conflict. When identity evidence agrees but names differ, the cluster keeps one deterministic primary name while every individual name remains visible on its own evidence row.
 
 Compatibility properties `resolution.organization`, `resolution.evidence_types`, `evidence.rule_type`, and `evidence.matched_pattern` remain available for initial Phase 1 callers, but serialized output uses the explicit 1.2.0 fields above.
