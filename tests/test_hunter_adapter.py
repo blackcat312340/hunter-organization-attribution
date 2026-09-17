@@ -27,3 +27,25 @@ def test_unsupported_field_is_never_exposed_to_rules():
     record = normalize_hunter_record({"ip": "203.0.113.1", "body": "University"})
     assert not hasattr(record, "body")
 
+
+def test_conflicting_alias_values_fail_closed_in_strict_mode():
+    with pytest.raises(ValueError, match="Conflicting Hunter fields: web_title and alias title"):
+        normalize_hunter_record({
+            "ip": "192.0.2.1",
+            "web_title": "Canonical Title",
+            "title": "Different Title",
+        }, strict=True)
+
+
+def test_matching_alias_values_are_accepted_in_strict_mode():
+    record = normalize_hunter_record({
+        "ip": "192.0.2.1",
+        "asn_organization": "Example Network",
+        "asn_org": "Example Network",
+    }, strict=True)
+    assert record.asn_organization == "Example Network"
+
+
+def test_asn_must_fit_32_bit_asn_space():
+    with pytest.raises(ValueError, match="ASN must be between"):
+        normalize_hunter_record({"ip": "192.0.2.1", "asn": 4_294_967_296})
