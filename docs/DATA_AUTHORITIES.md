@@ -13,18 +13,7 @@ No external measurement or authority data are committed. Runtime users provide l
 
 Optional columns include `rule_id`, `organization_id`, `category`, and `notes`. CSV, JSON, and YAML are accepted. JSON/YAML may be a row list or an object with a `rows` list.
 
-Loaders verify:
-
-- expected SHA-256;
-- supported authority type;
-- required fields;
-- optional expected row count;
-- IPv4/range validity;
-- ASN syntax/range and role semantics;
-- basic domain syntax;
-- provenance/audit metadata.
-
-The audit record also includes a normalization report. Phase 1 validates but does not silently rewrite authority values.
+Loaders verify expected SHA-256, supported authority type, required fields, optional expected row count, IPv4/range validity, ASN syntax/range and role semantics, basic domain syntax, and provenance/audit metadata. The audit record includes a normalization report. Phase 1 validates but does not silently rewrite authority values.
 
 ## China education/research IPv4 range authority
 
@@ -44,18 +33,22 @@ Only this metadata belongs in Git. The actual CSV must remain external.
 
 ## LENS methodology archive
 
+The Phase 1 source-completeness gate was closed on `2026-09-17` using the re-supplied original archive.
+
 - filename: `LENS-20260602.zip`
-- recorded SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
+- independently verified SHA-256: `0e76e38b27859339f952ae34d49302c8fdd358458a4d5c3b29fbfccc1221f10c`
+- embedded Git remote: `https://github.com/Cristliu/LENS`
+- embedded `main` commit: `19a155697284c58d895b47a1506472a23b338594`
+- reviewed source file: `utils/cn_org_ip_stats.py`
+- reviewed source-file SHA-256: `b4faa14c6a6fe0b0ef6e62c6e3d339d547a5f1cf6348788a85224856426f7e29`
 - use: methodology/rule migration reference only
-- migration review date: `2026-09-17`
 - runtime role: none
 - repository status: excluded by `*.zip`
-- migrated runtime fields: `org -> asn_organization` (semantic narrowing), `domain -> domain/root_domain`, `hosts -> host`, `titles -> web_title`
-- unsupported runtime fields: `body`, `server`, `app`
 - migration inventory: `docs/LENS_RULE_MIGRATION.md`
-- known source-verification gap: preserved task notes identify an `SOE` category family whose exact source rule is not available in the current review environment
 
-The archive bytes were not available in this review environment for an independent re-hash. The recorded digest therefore remains inherited provenance rather than a newly verified digest. If the archive is reintroduced, its digest must be verified before source-complete migration is claimed, and the original classifier must be compared rule by rule with the repository inventory. No missing executable rule should be reconstructed from a category name or summary alone.
+The verified source confirms the general classifier families `EDU_RESEARCH_PAT`, `GOV_PAT`, `FINANCE_PAT`, `HEALTH_PAT`, `SOE_PAT`, `CLOUD_PAT`, and `ISP_PAT`. It also confirms a separate ten-rule `SENSITIVE_RULES` classifier plus two guard regexes; those are preserved as reference-only because their target and cross-field guard semantics differ from general organization attribution.
+
+LENS field mapping is documented in `rules/field_mapping.yaml`. FOFA/LENS observations and outputs are not accepted as runtime attribution truth.
 
 ## Exact-IP/domain association authorities
 
