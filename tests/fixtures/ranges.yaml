@@ -1,0 +1,12 @@
+rows:
+  - rule_id: test.range.example_university
+    start_ip: 192.0.2.0
+    end_ip: 192.0.2.127
+    organization: Example University
+    category: education_research
+  - rule_id: test.range.conflict_institute
+    start_ip: 198.51.100.0
+    end_ip: 198.51.100.255
+    organization: Conflicting Institute
+    category: education_research
+

@@ -1,0 +1,17 @@
+rows:
+  - rule_id: test.asn.example_university
+    asn: 64510
+    organization: Example University
+    role: organization
+    category: education_research
+  - rule_id: test.asn.cernet_context
+    asn: 64511
+    organization: CERNET
+    role: network
+    category: education_research
+  - rule_id: test.asn.aws_context
+    asn: 64512
+    organization: Amazon Web Services
+    role: infrastructure
+    category: cloud_vendor
+

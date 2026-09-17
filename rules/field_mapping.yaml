@@ -1,0 +1,31 @@
+schema_version: 1
+mappings:
+  - lens_field: org
+    hunter_field: asn_organization
+    status: supported_with_semantic_narrowing
+    notes: Hunter ASN organization is network registration context; never automatically treated as hosted organization.
+  - lens_field: domain
+    hunter_field: domain
+    status: supported
+    notes: Normalized lower-case hostname/domain.
+  - lens_field: hosts
+    hunter_field: host
+    status: supported
+    notes: Each Hunter observation has one normalized host string.
+  - lens_field: titles
+    hunter_field: web_title
+    status: supported
+    notes: Each Hunter observation has one reviewed web title.
+  - lens_field: body
+    hunter_field: null
+    status: unsupported
+    notes: No approved NormalizedHunterRecord equivalent.
+  - lens_field: server
+    hunter_field: null
+    status: unsupported
+    notes: No approved NormalizedHunterRecord equivalent.
+  - lens_field: app
+    hunter_field: null
+    status: unsupported
+    notes: No approved NormalizedHunterRecord equivalent.
+

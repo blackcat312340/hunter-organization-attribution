@@ -1,0 +1,11 @@
+schema_version: 1
+rules:
+  - rule_id: lens.category.education_research.root_domain
+    target: organization_category
+    field: root_domain
+    operator: regex
+    pattern: '(?:\.edu(?:\.[a-z]{2})?$|\.ac\.[a-z]{2}$)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Hunter root-domain form of LENS .edu classification; does not invent an institution.
+

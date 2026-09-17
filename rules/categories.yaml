@@ -1,0 +1,84 @@
+schema_version: 1
+rules:
+  - rule_id: lens.category.education_research.asn_org
+    target: organization_category
+    field: asn_organization
+    operator: regex
+    pattern: '(?:cernet|education\s+and\s+research|university|college|academy\s+of\s+sciences|cnic-cas|research\s+network|教育|大学|学院|科学院|中科院)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Migrated from EDU_RESEARCH_PAT; category-only and never creates an organization identity.
+  - rule_id: lens.category.education_research.domain
+    target: organization_category
+    field: domain
+    operator: regex
+    pattern: '(?:\.edu(?:\.|$)|\.ac\.[a-z]{2}$)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Field-separated Hunter translation of the LENS combined-text rule.
+  - rule_id: lens.category.education_research.host
+    target: organization_category
+    field: host
+    operator: regex
+    pattern: '(?://[^/]*\.edu(?:[./:]|$)|cernet|cnic-cas)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Executable only against the reviewed Hunter host field.
+  - rule_id: lens.category.education_research.title
+    target: organization_category
+    field: web_title
+    operator: regex
+    pattern: '(?:university|college|academy\s+of\s+sciences|national\s+laboratory|教育|大学|学院|科学院|中科院)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Migrated title-compatible education and research terms.
+  - rule_id: lens.category.government.domain
+    target: organization_category
+    field: domain
+    operator: regex
+    pattern: '(?:\.gov(?:\.|$)|\.mil(?:\.|$)|europa\.eu$)'
+    resolved_category: government
+    source: LENS-20260602
+    notes: Migrated from GOV_PAT and sensitive rules without resolving an agency name.
+  - rule_id: lens.category.finance.asn_org
+    target: organization_category
+    field: asn_organization
+    operator: regex
+    pattern: '(?:bank|finance|securities|insurance|银行|证券|保险)'
+    resolved_category: finance
+    source: LENS-20260602
+    notes: Migrated from FINANCE_PAT; classification only.
+  - rule_id: lens.category.healthcare.title
+    target: organization_category
+    field: web_title
+    operator: regex
+    pattern: '(?:hospital|health|医院)'
+    resolved_category: healthcare
+    source: LENS-20260602
+    notes: Migrated from HEALTH_PAT; title evidence is category-only.
+  - rule_id: lens.unsupported.fofa.body.education
+    target: organization_category
+    field: fofa_body
+    operator: regex
+    pattern: '(?:university|education|research)'
+    resolved_category: education_research
+    source: LENS-20260602
+    notes: Unsupported reference; FOFA body has no approved Hunter-equivalent field.
+    executable: false
+  - rule_id: lens.unsupported.fofa.server
+    target: organization_category
+    field: fofa_server
+    operator: regex
+    pattern: '.+'
+    source: LENS-20260602
+    notes: Unsupported reference; FOFA server is not in NormalizedHunterRecord.
+    executable: false
+  - rule_id: lens.unsupported.fofa.app
+    target: organization_category
+    field: fofa_app
+    operator: regex
+    pattern: '.+'
+    source: LENS-20260602
+    notes: Unsupported reference; FOFA app is not in NormalizedHunterRecord.
+    executable: false
+

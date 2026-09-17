@@ -1,0 +1,10 @@
+rows:
+  - rule_id: test.domain.example_university
+    domain: example.edu
+    organization: Example University
+    category: education_research
+  - rule_id: test.domain.other_university
+    domain: other.edu
+    organization: Other University
+    category: education_research
+

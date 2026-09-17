@@ -1,0 +1,6 @@
+rows:
+  - rule_id: test.exact.example_university
+    ip: 192.0.2.10
+    organization: Example University
+    category: education_research
+
