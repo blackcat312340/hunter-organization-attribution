@@ -13,19 +13,30 @@ IDENTITY_PRIORITY = {
 }
 
 
+def _identity_key(item: Evidence) -> tuple[str | None, str] | None:
+    if not item.resolved_organization:
+        return None
+    return (item.resolved_organization_id, item.resolved_organization)
+
+
+def _association_types(evidence: tuple[Evidence, ...], *, add_multi_rule: bool) -> tuple[str, ...]:
+    base_types = {e.rule_family for e in evidence}
+    if add_multi_rule:
+        base_types.add("multi_rule")
+    return tuple(sorted(base_types))
+
+
 def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> Resolution:
     identities: dict[tuple[str | None, str], list[Evidence]] = defaultdict(list)
     identity_evidence: list[Evidence] = []
     for item in evidence:
-        if item.resolved_organization:
-            key = (item.resolved_organization_id, item.resolved_organization)
+        key = _identity_key(item)
+        if key is not None:
             identities[key].append(item)
             identity_evidence.append(item)
 
     categories = tuple(sorted({e.resolved_category for e in evidence if e.resolved_category}))
     infrastructure = tuple(sorted({e.infrastructure_organization for e in evidence if e.infrastructure_organization}))
-    base_types = {e.rule_family for e in evidence}
-    association_types = tuple(sorted(base_types | ({"multi_rule"} if len(evidence) > 1 else set())))
 
     if not identities:
         status = "category_only" if categories else "unresolved"
@@ -33,7 +44,7 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
             organization_id=None,
             organization_name=None,
             categories=categories,
-            association_types=association_types,
+            association_types=_association_types(evidence, add_multi_rule=False),
             infrastructure_organizations=infrastructure,
             infrastructure_category=record.infrastructure_category,
             provider_family=record.provider_family,
@@ -49,7 +60,7 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
             organization_id=None,
             organization_name=None,
             categories=categories,
-            association_types=association_types,
+            association_types=_association_types(evidence, add_multi_rule=False),
             infrastructure_organizations=infrastructure,
             infrastructure_category=record.infrastructure_category,
             provider_family=record.provider_family,
@@ -60,12 +71,13 @@ def resolve(evidence: tuple[Evidence, ...], record: NormalizedHunterRecord) -> R
         )
 
     organization_id, organization_name = identity_keys[0]
-    agreement = "multi_rule_agreement" if len(identity_evidence) > 1 else "single_identity_evidence"
+    agreeing_identity_rules = len(identity_evidence)
+    agreement = "multi_rule_agreement" if agreeing_identity_rules > 1 else "single_identity_evidence"
     return Resolution(
         organization_id=organization_id,
         organization_name=organization_name,
         categories=categories,
-        association_types=association_types,
+        association_types=_association_types(evidence, add_multi_rule=agreeing_identity_rules > 1),
         infrastructure_organizations=infrastructure,
         infrastructure_category=record.infrastructure_category,
         provider_family=record.provider_family,
