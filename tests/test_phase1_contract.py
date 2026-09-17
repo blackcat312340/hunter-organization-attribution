@@ -45,12 +45,13 @@ def test_resolution_exposes_agreement_ambiguity_and_asset_context(engine):
         "infrastructure_category": "education_network",
         "provider_family": "ExampleProvider",
     }))
-    assert result.schema_version == "1.1.0"
+    assert result.schema_version == "1.2.0"
     assert result.resolution.organization_name == "Example University"
     assert result.resolution.ambiguity_status == "unambiguous"
     assert result.resolution.agreement_status == "multi_rule_agreement"
     assert "multi_rule" in result.resolution.association_types
     assert result.resolution.infrastructure_category == "education_network"
+    assert "education_network" in result.resolution.infrastructure_categories
     assert result.resolution.provider_family == "ExampleProvider"
 
 
