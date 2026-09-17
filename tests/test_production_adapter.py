@@ -92,6 +92,22 @@ def test_asn_enrichment_mismatch_fails_closed():
         )
 
 
+def test_asn_enrichment_requires_record_asn():
+    with pytest.raises(ValueError, match="requires a Hunter record ASN"):
+        project_measurement212_hunter_record(
+            production_row(asn=""),
+            asn_enrichment={"asn": "64500", "asn_category": "isp_carrier"},
+        )
+
+
+def test_asn_enrichment_requires_lookup_asn_key():
+    with pytest.raises(ValueError, match="row is missing its ASN key"):
+        project_measurement212_hunter_record(
+            production_row(asn="64500"),
+            asn_enrichment={"asn_category": "isp_carrier"},
+        )
+
+
 def test_unreviewed_production_field_fails_closed_by_default():
     with pytest.raises(ValueError, match="Unreviewed Measurement 212 Hunter fields: mystery"):
         project_measurement212_hunter_record(production_row(mystery="value"))
