@@ -15,6 +15,8 @@ MEASUREMENT212_SOURCE_SCRIPT = "scripts/build_measurement_212_institution_ip_exp
 MEASUREMENT212_SOURCE_SCRIPT_BLOB = "89a7d1fc1e0cfce4f90b129c53c36476a5ccc7a6"
 MEASUREMENT212_ASN_LOOKUP_SCRIPT = "scripts/build_measurement_212_asn_v2_lookup.py"
 MEASUREMENT212_ASN_LOOKUP_SCRIPT_BLOB = "49ae1e784de77a515d0fe75c950e1fe560a78f4b"
+MEASUREMENT212_ASN_LOOKUP_PATH = "artifacts/measurement_212_asn_v2_lookup.csv"
+MEASUREMENT212_ASN_LOOKUP_SHA256 = "1709d5be6478bf5add9566b5b1d843aa1eb5a79d4e9962fd07fc19d093105390"
 
 # Fields directly consumed by the organization-attribution runtime. These names
 # are verified against the production Measurement 212 reader at the source SHA
