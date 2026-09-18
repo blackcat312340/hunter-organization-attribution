@@ -10,13 +10,16 @@ from pathlib import Path
 from hunter_org_attribution import (
     ROR_NAMESPACE,
     AttributionEngine,
+    adapt_ror_domains,
     project_measurement212_hunter_record,
     load_caida_as2org_authority_from_text,
     load_cisa_dotgov_authority,
     load_ror_domain_authority,
     normalize_hunter_record,
 )
-from hunter_org_attribution.provenance import LoadedAuthority, sha256_file
+from hunter_org_attribution.provenance import LoadedAuthority, load_authority_rows, sha256_file
+
+from psl_mini import build_psl
 
 
 GLOBAL = Path(__file__).parent / "fixtures" / "global"
@@ -192,3 +195,82 @@ def test_invariant_source_identifiers_stay_namespace_separated():
     assert caida_block["network_organization_id"] not in {
         evidence.resolved_organization_id for evidence in caida_result.evidence
     }
+
+
+# --------------------------------------------------------------------------
+# Phase 5.2 invariants 13-15: public-suffix authority quality gate
+# --------------------------------------------------------------------------
+
+def gated_ror_authority(records):
+    psl = build_psl()
+    rows, _ = adapt_ror_domains(records, psl=psl)
+    return load_authority_rows(
+        rows,
+        authority_type="domains",
+        source="ror_domains",
+        sha256="2" * 64,
+        provenance={"ror_identity_status_policy": "active-only", "psl_quality_policy": "phase5.2"},
+    )
+
+
+def gated_ror_record(ror_id, name, domains):
+    return {
+        "id": ror_id,
+        "status": "active",
+        "names": [{"value": name, "types": ["ror_display", "label"]}],
+        "domains": domains,
+    }
+
+
+# 15 (task 13). A ROR direct identity authority key is never itself a PSL public suffix.
+def test_invariant_ror_authority_key_is_never_a_psl_public_suffix():
+    psl = build_psl()
+    records = [
+        gated_ror_record("0gen001", "Generic CN Edu", ["edu.cn"]),
+        gated_ror_record("0tsing01", "Tsinghua University", ["tsinghua.edu.cn"]),
+        gated_ror_record("0acth01", "Generic TH Acad", ["ac.th"]),
+        gated_ror_record("0acth02", "Example TH Acad", ["example.ac.th"]),
+        gated_ror_record("0harv01", "Harvard University", ["harvard.edu"]),
+        gated_ror_record("0gh001", "Pages Org", ["github.io"]),
+        gated_ror_record("0gh002", "User Org", ["myorg.github.io"]),
+    ]
+    rows, counts = adapt_ror_domains(records, psl=psl)
+    assert all(not psl.is_public_suffix(row["domain"]) for row in rows)
+    assert {row["domain"] for row in rows} == {
+        "tsinghua.edu.cn", "example.ac.th", "harvard.edu", "myorg.github.io",
+    }
+    assert counts["public_suffix_unique_keys_dropped"] == 3
+
+
+# 16 (task 14). No public-suffix ROR identity evidence reaches final records.
+def test_invariant_no_public_suffix_ror_identity_evidence_reaches_final_records():
+    records = [
+        gated_ror_record("0gen001", "Generic CN Edu", ["edu.cn"]),
+        gated_ror_record("0tsing01", "Tsinghua University", ["tsinghua.edu.cn"]),
+    ]
+    engine = AttributionEngine.from_repository_defaults(authorities=[gated_ror_authority(records)])
+    generic = engine.attribute(normalize_hunter_record({"ip": "203.0.113.9", "domain": "edu.cn"}))
+    registrable = engine.attribute(normalize_hunter_record({"ip": "203.0.113.9", "domain": "tsinghua.edu.cn"}))
+    assert generic.resolution.organization_name is None
+    assert generic.resolution.status in {"unresolved", "category_only"}
+    assert all(evidence.source != "ror_domains" for evidence in generic.evidence)
+    assert registrable.resolution.organization_name == "Tsinghua University"
+    assert registrable.resolution.organization_id == "ror:0tsing01"
+
+
+# 17 (task 15). PSL filtering occurs before ROR ambiguity detection.
+def test_invariant_psl_filtering_precedes_ror_ambiguity_detection():
+    records = [
+        gated_ror_record("0gen001", "Generic CN Edu A", ["edu.cn"]),
+        gated_ror_record("0gen002", "Generic CN Edu B", ["edu.cn"]),
+    ]
+    # Without the gate: two active claims on one canonical key -> ambiguous.
+    _, ungated = adapt_ror_domains(records)
+    assert ungated["ambiguous_domain_keys_dropped"] == 1
+    # With the gate: the public-suffix key is dropped BEFORE ambiguity detection,
+    # so no ambiguity record is produced for a key that cannot be eligible anyway.
+    rows, counts = adapt_ror_domains(records, psl=build_psl())
+    assert rows == []
+    assert counts["ambiguous_domain_keys_dropped"] == 0
+    assert counts["public_suffix_domain_entries_dropped"] == 2
+    assert counts["public_suffix_unique_keys_dropped"] == 1

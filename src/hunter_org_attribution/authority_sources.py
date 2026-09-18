@@ -37,6 +37,12 @@ from pathlib import Path
 from typing import Any
 
 from .provenance import AuthoritySourceError, LoadedAuthority, load_authority_rows, sha256_file
+from .public_suffix import (
+    PSL_ICANN_SECTION,
+    PSL_PRIVATE_SECTION,
+    PSL_SOURCE_URL,
+    PublicSuffixList,
+)
 
 
 CHINA_INSTITUTION_RANGE_ADAPTER = "reviewed-adapter:china-institution-ipv4-range:v1"
@@ -493,6 +499,8 @@ def _ror_display_name(record: Mapping[str, Any]) -> str | None:
 
 def adapt_ror_domains(
     source_records: Iterable[Mapping[str, Any]],
+    *,
+    psl: PublicSuffixList | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Project schema-v2 ROR records into canonical ``domain`` authority rows.
 
@@ -507,10 +515,22 @@ def adapt_ror_domains(
     the successor organization, and no status-effective timestamp exists to assume
     an inactive/withdrawn record was active at observation time.
 
+    Phase 5.2 public-suffix quality gate: when a ``psl`` matcher is supplied, a
+    canonical source-provided domain that is itself a PSL public suffix (ICANN or
+    PRIVATE section, including wildcard/exception semantics) is dropped before
+    ambiguity detection. A generic public-suffix authority key (for example
+    ``edu.cn``) must never become a propagatable organization identity root, so it
+    cannot pollute a real registrable domain (for example ``tsinghua.edu.cn``)
+    that merely shares its suffix. Processing order is frozen as: parse source
+    record -> status filter (active only) -> canonicalize source-provided domains
+    -> PSL public-suffix quality gate -> drop invalid/public-suffix domains ->
+    deduplicate identical mappings -> detect ambiguity among remaining eligible
+    mappings -> build the canonical direct identity authority.
+
     A canonical domain claimed by more than one eligible active ROR identifier is
     ``AMBIGUOUS``: the key is dropped rather than resolved by record order, and
     the drop is counted per key as ``ambiguous_domain_keys_dropped``. Ambiguity is
-    computed only among eligible records, after status filtering.
+    computed only among eligible records, after status and public-suffix filtering.
     """
     counts = {
         "organizations_read": 0,
@@ -531,9 +551,17 @@ def adapt_ror_domains(
         "blank_organization_names": 0,
         "duplicate_domain_entries": 0,
         "ambiguous_domain_keys_dropped": 0,
+        "public_suffix_domain_entries_dropped": 0,
+        "public_suffix_unique_keys_dropped": 0,
+        "public_suffix_icann_dropped": 0,
+        "public_suffix_private_dropped": 0,
+        "public_suffix_unique_icann_keys_dropped": 0,
+        "public_suffix_unique_private_keys_dropped": 0,
     }
     claims: dict[str, dict[str, Any]] = {}
     ambiguous: set[str] = set()
+    dropped_icann_keys: set[str] = set()
+    dropped_private_keys: set[str] = set()
 
     for index, record in enumerate(source_records, start=1):
         counts["organizations_read"] += 1
@@ -613,6 +641,20 @@ def adapt_ror_domains(
             if domain is None:
                 counts["invalid_domains"] += 1
                 continue
+            if psl is not None:
+                ps_match = psl.match(domain)
+                if ps_match is not None and ps_match.public_suffix == domain:
+                    # The canonical domain is itself a shared PSL public suffix:
+                    # it is not a registrable organization root and must not
+                    # propagate identity to subdomains. Gate before ambiguity.
+                    counts["public_suffix_domain_entries_dropped"] += 1
+                    if ps_match.rule is not None and ps_match.rule.section == PSL_PRIVATE_SECTION:
+                        counts["public_suffix_private_dropped"] += 1
+                        dropped_private_keys.add(domain)
+                    else:
+                        counts["public_suffix_icann_dropped"] += 1
+                        dropped_icann_keys.add(domain)
+                    continue
             if domain in ambiguous:
                 continue
             existing = claims.get(domain)
@@ -636,6 +678,9 @@ def adapt_ror_domains(
 
     projected = [claims[domain] for domain in sorted(claims)]
     counts["usable_unique_domains"] = len(projected)
+    counts["public_suffix_unique_keys_dropped"] = len(dropped_icann_keys) + len(dropped_private_keys)
+    counts["public_suffix_unique_icann_keys_dropped"] = len(dropped_icann_keys)
+    counts["public_suffix_unique_private_keys_dropped"] = len(dropped_private_keys)
     return projected, counts
 
 
@@ -718,11 +763,25 @@ def load_ror_domain_authority(
     source: str = "ror_domains",
     expected_rows: int | None = None,
     provenance: Mapping[str, Any] | None = None,
+    psl_path: str | Path | None = None,
+    psl_sha256: str = "",
+    psl_source: str = "",
+    psl_retrieved_at: str = "",
 ) -> LoadedAuthority:
-    """Load a reviewed ROR schema-v2 dump as a direct domain identity authority."""
+    """Load a reviewed ROR schema-v2 dump as a direct domain identity authority.
+
+    When ``psl_path`` is supplied, the Phase 5.2 public-suffix quality gate is
+    active: source-provided domains that are themselves a PSL public suffix are
+    dropped before ambiguity detection. The frozen PSL snapshot identity
+    (``psl_source`` / ``psl_sha256`` / ``psl_retrieved_at``) is recorded in the
+    authority audit so aggregate ingestion statistics are reproducible.
+    """
     resolved = Path(path)
     actual = _check_sha(resolved, expected_sha256)
-    canonical, counts = adapt_ror_domains(_iter_ror_records(resolved))
+    psl = None
+    if psl_path is not None:
+        psl = PublicSuffixList.from_file(Path(psl_path), expected_sha256=psl_sha256)
+    canonical, counts = adapt_ror_domains(_iter_ror_records(resolved), psl=psl)
     if expected_rows is not None and len(canonical) != expected_rows:
         raise ValueError(f"Row-count mismatch: expected {expected_rows}, got {len(canonical)}")
     audit_provenance = dict(provenance or {})
@@ -731,6 +790,17 @@ def load_ror_domain_authority(
         "domain identity; 'inactive' and 'withdrawn' records are counted and "
         "their domain entries dropped, with no automatic successor remap."
     )
+    if psl is not None:
+        audit_provenance["psl_source"] = psl_source or PSL_SOURCE_URL
+        audit_provenance["psl_sha256"] = psl_sha256 or psl.sha256
+        audit_provenance["psl_retrieved_at"] = psl_retrieved_at or psl.retrieved_at
+        audit_provenance["psl_quality_policy"] = (
+            "public-suffix quality gate (Phase 5.2): a canonical source-provided "
+            "domain that is itself a PSL public suffix (ICANN or PRIVATE section, "
+            "wildcard/exception semantics included) is dropped before ambiguity "
+            "detection so no generic public-suffix authority key propagates "
+            "identity to subdomains."
+        )
     return _finalize(
         canonical,
         authority_type="domains",

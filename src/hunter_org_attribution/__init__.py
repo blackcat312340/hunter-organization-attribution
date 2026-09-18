@@ -38,6 +38,13 @@ from .hunter_adapter import normalize_hunter_record
 from .models import AttributionResult, NormalizedHunterRecord
 from .production_adapter import Measurement212Projection, project_measurement212_hunter_record
 from .provenance import AuthoritySourceError, AuthoritySpec, load_authority, load_authority_rows
+from .public_suffix import (
+    PSL_ICANN_SECTION,
+    PSL_PRIVATE_SECTION,
+    PSL_SOURCE_URL,
+    PslRule,
+    PublicSuffixList,
+)
 
 __all__ = [
     "AttributionEngine",
@@ -59,6 +66,11 @@ __all__ = [
     "GOV_DOMAIN_REGISTRY_ADAPTER",
     "Measurement212Projection",
     "NormalizedHunterRecord",
+    "PSL_ICANN_SECTION",
+    "PSL_PRIVATE_SECTION",
+    "PSL_SOURCE_URL",
+    "PslRule",
+    "PublicSuffixList",
     "ROR_DOMAIN_AUTHORITY_ADAPTER",
     "ROR_NAMESPACE",
     "adapt_caida_as2org",
