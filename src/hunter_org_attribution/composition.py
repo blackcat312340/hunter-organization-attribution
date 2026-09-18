@@ -52,6 +52,11 @@ class AuthorityArtifact:
     version: str | None = None
     expected_rows: int | None = None
     provenance: Mapping[str, Any] | None = None
+    # Phase 5.2 ROR public-suffix quality gate: frozen PSL snapshot identity.
+    psl_path: Path | None = None
+    psl_sha256: str = ""
+    psl_source: str | None = None
+    psl_retrieved_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +135,10 @@ class AuthorityComposition:
                 source=artifact.source or "ror_domains",
                 expected_rows=artifact.expected_rows,
                 provenance=artifact.provenance,
+                psl_path=artifact.psl_path,
+                psl_sha256=artifact.psl_sha256 or "",
+                psl_source=artifact.psl_source or "",
+                psl_retrieved_at=artifact.psl_retrieved_at or "",
             ))
         if self.caida_as2org is not None:
             artifact = self.caida_as2org

@@ -13,6 +13,8 @@ classified by ``PublicSuffixList`` semantics.
 
 from hunter_org_attribution import (
     AttributionEngine,
+    AuthorityArtifact,
+    AuthorityComposition,
     PublicSuffixList,
     adapt_ror_domains,
     load_ror_domain_authority,
@@ -303,3 +305,43 @@ def test_loader_records_psl_provenance(tmp_path):
     assert provenance["adapter_counts"]["public_suffix_unique_keys_dropped"] == 1
     assert provenance["adapter_counts"]["usable_unique_domains"] == 1
     assert {row["domain"] for row in loaded.rows} == {"tsinghua.edu.cn"}
+
+
+# --------------------------------------------------------------------------
+# Composition plumbing
+# --------------------------------------------------------------------------
+
+def test_composition_forwards_psl_to_ror_authority(tmp_path):
+    import json
+
+    from hunter_org_attribution.provenance import sha256_file
+
+    psl_file = tmp_path / "psl.dat"
+    psl_file.write_text(MINI_PSL, encoding="utf-8")
+    ror_file = tmp_path / "ror.json"
+    ror_file.write_text(json.dumps([
+        ror_record("0gen001", "Generic CN Edu", ["edu.cn"]),
+        ror_record("0tsing01", "Tsinghua University", ["tsinghua.edu.cn"]),
+    ]), encoding="utf-8")
+
+    composed = AuthorityComposition(
+        ror_domains=AuthorityArtifact(
+            path=ror_file,
+            expected_sha256=sha256_file(ror_file),
+            source="ror_domains",
+            provenance={"version": "v2.test"},
+            psl_path=psl_file,
+            psl_sha256=sha256_file(psl_file),
+            psl_source="https://publicsuffix.org/list/public_suffix_list.dat",
+            psl_retrieved_at="2026-09-18T00:00:00Z",
+        ),
+    ).load()
+
+    ror_authority = next(a for a in composed.authorities if a.source == "ror_domains")
+    assert {row["domain"] for row in ror_authority.rows} == {"tsinghua.edu.cn"}
+    assert ror_authority.audit["provenance"]["psl_sha256"] == sha256_file(psl_file)
+
+    result = composed.engine.attribute(normalize_hunter_record({"ip": "203.0.113.9", "domain": "tsinghua.edu.cn"}))
+    assert result.resolution.organization_id == "ror:0tsing01"
+    generic = composed.engine.attribute(normalize_hunter_record({"ip": "203.0.113.9", "domain": "edu.cn"}))
+    assert generic.resolution.organization_name is None
