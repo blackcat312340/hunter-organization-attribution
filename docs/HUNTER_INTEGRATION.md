@@ -101,6 +101,18 @@ and checks that the lookup ASN agrees with the Hunter-record ASN. The remaining 
 
 Consequently, LENS-derived rules whose declared field is `asn_organization` are not executable for a record merely because the Measurement 212 ASN lookup is available. They require a separate reviewed source that actually supplies ASN organization registration text.
 
+## ROR authority status and temporal boundary
+
+The composed ROR direct-identity authority is the frozen `v2.12-2026-08-25` dump (retrieved `2026-09-18`). Integration applies it conservatively to historical Hunter observations (`2025-01-01` through `2026-04-30`):
+
+- **ROR `active`**: eligible direct identity.
+- **ROR `inactive`**: excluded from current direct identity. Lacking a reliable per-record status-effective timestamp, the record is **not** assumed to have been active at observation time.
+- **ROR `withdrawn`**: excluded from direct identity; ROR defines withdrawn records as erroneous/duplicate/out-of-scope.
+- **`successor` relationship**: never automatically substituted. A predecessor record's domain is not redirected to the successor organization.
+- The `2026-08` authority snapshot is **not** observation-time ground truth for `2025-01`–`2026-04` Hunter records; the exclusion is a conservative false-negative tradeoff.
+
+This boundary does not change the production projection contract or the serialized attribution schema (still `1.2.0`); the ROR status gate lives entirely in the ROR source adapter.
+
 ## Read-only small-sample validation
 
 `examples/validate_hunter_snapshot_contract.py` validates a local Hunter JSONL snapshot without writing measurement outputs. It:

@@ -140,7 +140,14 @@ class AttributionEngine:
             resolved_category=(str(row["category"]) if row.get("category") else None),
             infrastructure_organization=infrastructure_organization,
             notes=(str(row["notes"]) if row.get("notes") else None),
-            provenance={**authority.audit, "authority_sha256": authority.sha256},
+            provenance={
+                **authority.audit,
+                # Source-specific additive provenance. ROR canonical rows carry
+                # ``ror_status`` (always "active" after the Phase 5.1 status
+                # filter) so every ROR identity evidence row confirms it.
+                **({"ror_status": row["ror_status"]} if row.get("ror_status") else {}),
+                "authority_sha256": authority.sha256,
+            },
         )
 
     @staticmethod

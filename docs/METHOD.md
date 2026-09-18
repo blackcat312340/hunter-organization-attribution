@@ -168,6 +168,10 @@ This is an additive key inside an already-flexible provenance map, so the serial
 
 **CAIDA is not an identity authority.** Populating `asn_organization` does not create organization identity. The value may enable *category* evidence (`education_research`, `government`, ...) and *infrastructure* evidence (cloud, ISP, ...) through the existing field-local rules, and nothing else. It never sets `organization_id`, never sets `resolved_organization`, and never contributes to `multi_rule`. The source-local handle is preserved under the `caida-as2org` namespace and is never written to, or compared against, `organization_id`.
 
+### 12.2 ROR production-status provenance
+
+ROR is ingested with a **conservative status gate**: direct domain identity is produced **only** from ROR records whose `status` is `active`. Every canonical ROR row therefore carries `ror_status = "active"`, and every ROR identity evidence row confirms it inside the flexible `evidence.provenance` map (additive, so the serialized schema version is unchanged). `inactive` and `withdrawn` records are counted and their domain entries dropped; a `successor` relationship is counted but never used to redirect a predecessor domain to the successor organization; ambiguity among domains is computed only after this status filter. See `docs/DATA_AUTHORITIES.md` for the full policy and per-status adapter counters.
+
 ## 13. External authority validation
 
 Each external authority load requires local `path`, `expected_sha256`, authority type/schema, source name, optional expected row count, and provenance metadata.
@@ -203,5 +207,7 @@ The method does **not** by itself establish that the organization deployed the s
 - Historical ownership, shared hosting, compromised hosts, reverse proxies, CDN origins, legal ownership, and operational control may diverge from association evidence.
 - The method does not claim global completeness and performs no network queries.
 - Direct identity coverage remains partial: the global `.gov` registrar is US-only, and ROR domain coverage reaches only the organizations whose dump records publish `domains`. Ambiguous shared domains are excluded rather than resolved.
+- ROR direct identity is restricted to `active` ROR records. `inactive` and `withdrawn` records never produce identity, and their domains are not redirected to any `successor` organization.
+- The ROR authority is a later reviewed snapshot (`v2.12-2026-08-25`) applied conservatively to earlier Hunter observations (`2025-01-01` through `2026-04-30`). Without per-record status-effective timestamps, `inactive` records are excluded rather than assumed active at observation time — a conservative false-negative tradeoff, not a time-aligned ground-truth claim.
 - `asn_organization` text is network-registration context. It improves category and infrastructure evidence and does **not** improve identity coverage.
 - No global institution IP-range authority exists; IPv4 institutional ranges remain country- or submission-specific.

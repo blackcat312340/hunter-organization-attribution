@@ -444,6 +444,34 @@ def ror_identifier(ror_id: str) -> str:
     return f"{ROR_NAMESPACE}:{ror_id.strip()}"
 
 
+# ROR dump ``status`` values (Phase 5.1): only ``active`` records are eligible
+# for direct domain identity. ``inactive`` and ``withdrawn`` records are counted
+# and their domain entries are dropped; they never produce direct identity and
+# their ``successor`` relationship is never used to redirect a predecessor
+# domain to a successor organization (no automatic successor remap).
+ROR_STATUS_ACTIVE = "active"
+ROR_STATUS_INACTIVE = "inactive"
+ROR_STATUS_WITHDRAWN = "withdrawn"
+
+ROR_SUCCESSOR_FIELDS = ("successor_relationships", "successor")
+
+
+def _ror_status(record: Mapping[str, Any]) -> str:
+    return _clean(record.get("status")).lower()
+
+
+def _ror_has_successor(record: Mapping[str, Any]) -> bool:
+    """Detect a successor relationship conservatively (counting only)."""
+    for key in ROR_SUCCESSOR_FIELDS:
+        value = record.get(key)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            if value:
+                return True
+        elif value:
+            return True
+    return False
+
+
 def _ror_display_name(record: Mapping[str, Any]) -> str | None:
     """Canonical ROR display name, without fuzzy or alias matching."""
     names = record.get("names")
@@ -471,15 +499,35 @@ def adapt_ror_domains(
     Only domains the ROR dump itself provides are ingested; no organization name
     is ever turned into a domain, and no alias is used for fuzzy matching.
 
-    A canonical domain claimed by more than one distinct ROR identifier is
+    Phase 5.1 status semantics (conservative correction): direct identity comes
+    **only** from a record whose ``status`` is ``active``. ``inactive`` and
+    ``withdrawn`` records are counted (per status, including whether they carry
+    domains or a ``successor`` relationship) and their domain entries are dropped;
+    a ``successor`` relationship is never used to redirect a predecessor domain to
+    the successor organization, and no status-effective timestamp exists to assume
+    an inactive/withdrawn record was active at observation time.
+
+    A canonical domain claimed by more than one eligible active ROR identifier is
     ``AMBIGUOUS``: the key is dropped rather than resolved by record order, and
-    the drop is counted per key as ``ambiguous_domain_keys_dropped``.
+    the drop is counted per key as ``ambiguous_domain_keys_dropped``. Ambiguity is
+    computed only among eligible records, after status filtering.
     """
     counts = {
         "organizations_read": 0,
+        "active_records": 0,
+        "inactive_records": 0,
+        "withdrawn_records": 0,
+        "other_status_records": 0,
+        "active_records_with_domains": 0,
+        "inactive_records_with_domains": 0,
+        "withdrawn_records_with_domains": 0,
+        "inactive_records_with_successor": 0,
+        "withdrawn_records_with_successor": 0,
         "organizations_without_domains": 0,
         "domain_entries": 0,
         "invalid_domains": 0,
+        "inactive_domain_entries_dropped": 0,
+        "withdrawn_domain_entries_dropped": 0,
         "blank_organization_names": 0,
         "duplicate_domain_entries": 0,
         "ambiguous_domain_keys_dropped": 0,
@@ -492,12 +540,67 @@ def adapt_ror_domains(
         ror_id = _clean(record.get("id"))
         if not ror_id:
             raise AuthoritySourceError(f"Record {index} is missing a ROR id")
+        status = _ror_status(record)
         domains = record.get("domains")
         if not isinstance(domains, Sequence) or isinstance(domains, (str, bytes)):
             domains = ()
+
         if not domains:
             counts["organizations_without_domains"] += 1
+            if status == ROR_STATUS_INACTIVE:
+                counts["inactive_records"] += 1
+                if _ror_has_successor(record):
+                    counts["inactive_records_with_successor"] += 1
+            elif status == ROR_STATUS_WITHDRAWN:
+                counts["withdrawn_records"] += 1
+                if _ror_has_successor(record):
+                    counts["withdrawn_records_with_successor"] += 1
+            elif status == ROR_STATUS_ACTIVE:
+                counts["active_records"] += 1
+            else:
+                counts["other_status_records"] += 1
             continue
+
+        if status == ROR_STATUS_INACTIVE:
+            # Excluded from direct identity; counted and dropped.
+            counts["inactive_records"] += 1
+            counts["inactive_records_with_domains"] += 1
+            if _ror_has_successor(record):
+                counts["inactive_records_with_successor"] += 1
+            for entry in domains:
+                counts["domain_entries"] += 1
+                domain = _canonical_authority_domain(entry, index, drop_invalid=True)
+                if domain is None:
+                    counts["invalid_domains"] += 1
+                else:
+                    counts["inactive_domain_entries_dropped"] += 1
+            continue
+
+        if status == ROR_STATUS_WITHDRAWN:
+            # Excluded from direct identity; counted and dropped.
+            counts["withdrawn_records"] += 1
+            counts["withdrawn_records_with_domains"] += 1
+            if _ror_has_successor(record):
+                counts["withdrawn_records_with_successor"] += 1
+            for entry in domains:
+                counts["domain_entries"] += 1
+                domain = _canonical_authority_domain(entry, index, drop_invalid=True)
+                if domain is None:
+                    counts["invalid_domains"] += 1
+                else:
+                    counts["withdrawn_domain_entries_dropped"] += 1
+            continue
+
+        if status != ROR_STATUS_ACTIVE:
+            # Blank/unknown status is conservatively not eligible either.
+            counts["other_status_records"] += 1
+            for entry in domains:
+                counts["domain_entries"] += 1
+                _canonical_authority_domain(entry, index, drop_invalid=True)
+            continue
+
+        counts["active_records"] += 1
+        counts["active_records_with_domains"] += 1
         organization = _ror_display_name(record)
         if not organization:
             counts["blank_organization_names"] += 1
@@ -518,12 +621,15 @@ def adapt_ror_domains(
                     "domain": domain,
                     "organization": organization,
                     "organization_id": organization_id,
+                    "ror_status": ROR_STATUS_ACTIVE,
                 }
             elif existing["organization_id"] == organization_id:
                 counts["duplicate_domain_entries"] += 1
             else:
-                # Same canonical domain, two distinct ROR identifiers: no
-                # deterministic choice exists, so the key is excluded.
+                # Same canonical domain, two distinct eligible active ROR
+                # identifiers: no deterministic choice exists, so the key is
+                # excluded. Inactive/withdrawn records were dropped before this
+                # point, so they cannot poison an active claim as ambiguous.
                 claims.pop(domain, None)
                 ambiguous.add(domain)
                 counts["ambiguous_domain_keys_dropped"] += 1
@@ -619,6 +725,12 @@ def load_ror_domain_authority(
     canonical, counts = adapt_ror_domains(_iter_ror_records(resolved))
     if expected_rows is not None and len(canonical) != expected_rows:
         raise ValueError(f"Row-count mismatch: expected {expected_rows}, got {len(canonical)}")
+    audit_provenance = dict(provenance or {})
+    audit_provenance["ror_identity_status_policy"] = (
+        "active-only: only records whose ROR status is 'active' produce direct "
+        "domain identity; 'inactive' and 'withdrawn' records are counted and "
+        "their domain entries dropped, with no automatic successor remap."
+    )
     return _finalize(
         canonical,
         authority_type="domains",
@@ -628,7 +740,7 @@ def load_ror_domain_authority(
         source_columns=ROR_DOMAIN_SOURCE_COLUMNS,
         path=str(resolved),
         expected_rows=None,
-        provenance=provenance,
+        provenance=audit_provenance,
         counts=counts,
         duplicate_rows_removed=0,
     )

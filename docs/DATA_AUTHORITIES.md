@@ -126,6 +126,19 @@ The registrar publishes **no stable organization identifier**, only a free-text 
 
 Only domains the dump itself provides are ingested; no organization name is ever turned into a domain, and no alias is used for fuzzy matching. Identifiers are namespaced as `ror:<canonical-ror-id>` and compared only inside the `ror` namespace. A canonical domain claimed by two distinct ROR identifiers is `AMBIGUOUS`: the key is dropped rather than resolved by record order and counted as `ambiguous_domain_keys_dropped`. Organizations with empty `domains` create nothing.
 
+**Phase 5.1 status policy.** ROR production status is a source-level gate, applied **before** domain canonicalization and ambiguity detection:
+
+- **`status = active`** → eligible for direct domain identity. This is the only eligible status.
+- **`status = inactive`** → excluded from current direct identity. The record is counted (`inactive_records`, `inactive_records_with_domains`) and its domain entries are counted and dropped (`inactive_domain_entries_dropped`). It is **not** assumed to have been active at observation time.
+- **`status = withdrawn`** → excluded from direct identity. The record is counted (`withdrawn_records`, `withdrawn_records_with_domains`) and its domain entries are counted and dropped (`withdrawn_domain_entries_dropped`). ROR defines withdrawn records as erroneous/duplicate/out-of-scope.
+- A blank or unknown status is conservatively not eligible (`other_status_records`).
+- **No automatic successor remap.** An `inactive`/`withdrawn` record carrying a `successor` relationship is counted (`inactive_records_with_successor` / `withdrawn_records_with_successor`) but its domain is **never** redirected to the successor organization. A successor relationship is not proof that the predecessor's historical/current domain now belongs to the successor.
+- **Ambiguity is computed only among eligible active records.** A domain claimed by one active and one inactive/withdrawn record is **not** ambiguous; the active claim survives. Only a domain claimed by two distinct eligible active identifiers is dropped as ambiguous.
+- Every canonical row produced by the adapter carries `ror_status = "active"`, and every ROR identity evidence row confirms it in its `provenance`.
+- The adapter audit records the full per-status inventory under `adapter_counts` (see `docs/METHOD.md` section 16.3).
+
+**Temporal limitation.** The authority snapshot is `v2.12-2026-08-25` (retrieved `2026-09-18`). It is a later reviewed snapshot applied conservatively to historical Hunter observations (`2025-01-01` through `2026-04-30`). Because ROR publishes no reliable per-record status-effective timestamp, `inactive` records are excluded rather than assumed to have been active at observation time. This is a conservative false-negative tradeoff and is **not** a time-aligned ground-truth claim. `withdrawn` records are excluded because ROR defines them as erroneous/duplicate/out-of-scope.
+
 ### Identifier namespaces
 
 Source-local identifiers use **disjoint namespaces** and are never compared, joined, or deduplicated on raw value: `caida-as2org` (`network_organization_id`), `ror`, and the RIR-scoped handles (`ARIN` `LPL-141`, `RIPE` `ORG-IS136-RIPE`, APNIC/AFRINIC equivalents, LACNIC ownerids). Reconciliation happens only through ASN or an explicit map, never through identifier text.
