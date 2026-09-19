@@ -33,6 +33,13 @@ from .authority_sources import (
     ror_identifier,
 )
 from .composition import AuthorityArtifact, AuthorityComposition, compose_engine
+from .crosswalk import (
+    ALIAS_CROSSWALK_CONFLICT,
+    AliasCrosswalk,
+    CONSTRUCTION_RULE,
+    CrosswalkAlias,
+    build_alias_crosswalk_from_authorities,
+)
 from .engine import AttributionEngine
 from .hunter_adapter import normalize_hunter_record
 from .models import AttributionResult, NormalizedHunterRecord
@@ -47,6 +54,8 @@ from .public_suffix import (
 )
 
 __all__ = [
+    "ALIAS_CROSSWALK_CONFLICT",
+    "AliasCrosswalk",
     "AttributionEngine",
     "AttributionResult",
     "AuthorityArtifact",
@@ -61,6 +70,8 @@ __all__ = [
     "CAIDA_AS2ORG_SOURCE_ID",
     "CHINA_INSTITUTION_RANGE_ADAPTER",
     "CISA_DOTGOV_SOURCE_ID",
+    "CONSTRUCTION_RULE",
+    "CrosswalkAlias",
     "DOMAIN_ORG_ASSOCIATION_ADAPTER",
     "EXACT_IP_ORG_ASSOCIATION_ADAPTER",
     "GOV_DOMAIN_REGISTRY_ADAPTER",
@@ -79,6 +90,7 @@ __all__ = [
     "adapt_domain_org",
     "adapt_exact_ip_org",
     "adapt_ror_domains",
+    "build_alias_crosswalk_from_authorities",
     "compose_engine",
     "load_authority",
     "load_authority_rows",

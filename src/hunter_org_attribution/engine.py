@@ -34,9 +34,13 @@ class AttributionEngine:
         rules: Iterable[dict[str, Any]] = (),
         authorities: Iterable[LoadedAuthority] = (),
         asn_organization_authorities: Iterable[AsnOrganizationAuthority] = (),
+        alias_crosswalk=None,
     ):
         self.rules = tuple(sorted((r for r in rules if r.get("executable", True)), key=lambda r: r["rule_id"]))
         self.authorities = tuple(sorted(authorities, key=lambda a: (a.authority_type, a.source, a.sha256)))
+        # Phase 6 deterministic cross-source alias crosswalk. It only changes
+        # reconciliation identity grouping; evidence rows are never rewritten.
+        self.alias_crosswalk = alias_crosswalk
         # ASN -> asn_organization enrichment sources (network-registration text).
         # These never enter ``authorities``: they are not identity evidence and
         # they never resolve an organization.
@@ -61,11 +65,15 @@ class AttributionEngine:
         cls,
         authorities: Iterable[LoadedAuthority] = (),
         asn_organization_authorities: Iterable[AsnOrganizationAuthority] = (),
+        alias_crosswalk=None,
     ) -> "AttributionEngine":
         root = Path(__file__).resolve().parents[2]
         rule_root = root / "rules"
         paths = [rule_root / name for name in ("categories.yaml", "organization_patterns.yaml", "domain_patterns.yaml")]
-        return cls(load_rules(paths), authorities, asn_organization_authorities)
+        return cls(
+            load_rules(paths), authorities, asn_organization_authorities,
+            alias_crosswalk=alias_crosswalk,
+        )
 
     @staticmethod
     def _canonical_domain(value: object) -> str:
@@ -369,4 +377,6 @@ class AttributionEngine:
             enriched, asn_organization_provenance
         )
         ordered = tuple(sorted(evidence, key=lambda e: (e.rule_id, e.rule_family, e.matched_field, e.observed_value)))
-        return AttributionResult("1.2.0", enriched, ordered, resolve(ordered, enriched))
+        return AttributionResult(
+            "1.2.0", enriched, ordered, resolve(ordered, enriched, self.alias_crosswalk)
+        )

@@ -194,8 +194,13 @@ def compose_engine(
     authorities: Iterable[LoadedAuthority] = (),
     asn_organization_authorities: Iterable[AsnOrganizationAuthority] = (),
     rules: Iterable[dict[str, Any]] | None = None,
+    alias_crosswalk=None,
 ) -> AttributionEngine:
     """Compose already-loaded reviewed authorities into a runtime engine."""
     if rules is None:
-        return AttributionEngine.from_repository_defaults(authorities, asn_organization_authorities)
-    return AttributionEngine(rules, authorities, asn_organization_authorities)
+        return AttributionEngine.from_repository_defaults(
+            authorities, asn_organization_authorities, alias_crosswalk=alias_crosswalk
+        )
+    return AttributionEngine(
+        rules, authorities, asn_organization_authorities, alias_crosswalk=alias_crosswalk
+    )

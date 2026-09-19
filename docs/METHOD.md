@@ -127,6 +127,32 @@ Let *canonical name* mean the organization name with collapsed whitespace and ca
 
 If more than one identity remains after reconciliation, the result is `conflict`; if exactly one remains, the result is `resolved`.
 
+### 10.2 Cross-source identity alias crosswalk (Phase 6)
+
+A **cross-source identity alias** asserts that a source-native organization *name* with no stable identifier is a deterministic alias of an already-stable organization identifier (preferentially a ROR namespaced id, because ROR is the direct-identity authority that publishes stable namespaced organization identifiers).
+
+It is **not** fuzzy entity resolution, **not** translation matching, and **not** observation co-occurrence matching:
+
+- no name similarity / fuzzy matching;
+- no translation or bilingual equivalence, no acronym similarity;
+- no country / ASN / same-observed-IP / same-web-title inference;
+- a single Hunter observation carrying range evidence *and* ROR evidence is never itself an alias authority (that would circularly bless the very conflicts being reconciled).
+
+The **only** current construction rule is `shared_canonical_domain_unique_target`:
+
+1. A canonical domain `d` present in the ROR domain authority (stable id `ror:X` + display name) and in one of the no-ID domain authorities — submission domain (`domain-org-association`) or CISA dotgov — is a *bridge*.
+2. Each bridge asserts `normalized(no-ID name) -> ror:X`.
+3. A normalized name becomes a **global deterministic alias** only when every bridge for it targets the same single stable id. A name with bridges to two different stable ids is an alias-crosswalk conflict and is excluded (fail closed). One stable id may have many aliases (an alias set, not a conflict).
+4. Range and exact-IP authorities never participate in crosswalk construction (they carry no domain key), so there is no circular reconciliation: their no-ID names may only *use* an independently built alias.
+
+Evidence remains source-native: alias affects only reconciliation identity grouping, never the `organization_id`/`organization` values on any evidence row. In reconciliation the crosswalk is an additional path:
+
+- ID + no-ID, differing canonical names, where the no-ID name deterministically crosswalks to the same stable id → same identity (existing same-name semantics in 10.1 rule 2 stay untouched).
+- no-ID + no-ID, differing canonical names, both independently crosswalking to the same stable id → same identity; crosswalking to different stable ids → conflict.
+- two different *explicit* stable ids are never merged by the crosswalk.
+
+A cluster whose identity is fully crosswalk-derived takes the stable id's canonical display name, so a Chinese no-ID name and an English ROR name of one institution unify instead of splitting into two canonical identities.
+
 ## 11. Deterministic resolution
 
 Resolution does not calculate an opaque confidence score. Identity-bearing evidence is reconciled into identities by the rules in section 10.1. If exactly one identity remains, the result is resolved; if multiple identities remain, the result is conflict. Organization-category-only evidence yields `category_only`; infrastructure-only evidence yields `unresolved` with infrastructure context; no identity/category evidence also yields `unresolved`.
